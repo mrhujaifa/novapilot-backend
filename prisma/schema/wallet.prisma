@@ -1,0 +1,12 @@
+model Wallet {
+    id        String     @id @default(uuid())
+    userId    String
+    user      User       @relation(fields: [userId], references: [id])
+    address   String // checksum address
+    network   NetworkEnv
+    isPrimary Boolean    @default(true) // একাধিক wallet থাকলে কোনটা deposit-এর জন্য primary
+    createdAt DateTime   @default(now())
+
+    @@unique([address, network]) // একই address একই network-এ একবারই থাকবে
+    @@index([userId])
+}

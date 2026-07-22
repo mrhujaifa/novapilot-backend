@@ -1,0 +1,11 @@
+model User {
+    id        String   @id @default(uuid())
+    privyId   String   @unique // Privy DID, auth-এর সাথে link
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    wallets      Wallet[]
+    balances     Balance[]
+    transactions Transaction[]
+    usageLogs    UsageLog[]
+}

@@ -1,0 +1,16 @@
+model Deposit {
+    id          String            @id @default(uuid())
+    userId      String
+    walletId    String
+    network     NetworkEnv
+    txHash      String
+    amount      Decimal           @db.Decimal(18, 6)
+    status      TransactionStatus @default(PENDING)
+    confirmedAt DateTime?
+    createdAt   DateTime          @default(now())
+
+    transaction Transaction? // one-to-one link, deposit confirm হলে ledger entry বসবে
+
+    @@unique([txHash, network]) // একই tx hash duplicate process ঠেকাতে
+    @@index([userId])
+}

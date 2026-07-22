@@ -1,0 +1,15 @@
+enum NetworkEnv {
+    TESTNET
+    MAINNET
+}
+
+model Balance {
+    id        String     @id @default(uuid())
+    userId    String
+    user      User       @relation(fields: [userId], references: [id])
+    network   NetworkEnv
+    amount    Decimal    @db.Decimal(18, 6) // USDC 6 decimal precision
+    updatedAt DateTime   @updatedAt
+
+    @@unique([userId, network]) // per-network একটাই balance row per user
+}
