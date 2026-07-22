@@ -1,11 +1,18 @@
 model User {
-    id        String   @id @default(uuid())
-    privyId   String   @unique // Privy DID, auth-এর সাথে link
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+    id          String @id @default(uuid())
+    privyUserId String @unique // Privy identity, used only for login/auth now
 
-    wallets      Wallet[]
+    // Circle wallet fields — actual wallet lives here now, not Privy
+    circleWalletId String? @unique // Circle's internal wallet ID
+    walletAddress  String? @unique // on-chain address, filled after Circle wallet creation
+    network        String  @default("testnet") // "testnet" | "mainnet", matches CHAIN_ENV
+
+    createdAt    DateTime      @default(now())
+    updatedAt    DateTime      @updatedAt
     balances     Balance[]
     transactions Transaction[]
     usageLogs    UsageLog[]
+    wallets      Wallet[]
+
+    @@index([walletAddress])
 }

@@ -15,9 +15,15 @@ for (const envFile of envFiles) {
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().default(4000),
-  PRIVY_APP_ID: z.string().min(1).optional(),
-  PRIVY_APP_SECRET: z.string().min(1).optional(), // server verification key/secret
-  DATABASE_URL: z.string().min(1).optional(),
+
+  PRIVY_APP_ID: z.string().min(1), // identity/login only now
+  PRIVY_APP_SECRET: z.string().min(1),
+
+  CIRCLE_API_KEY: z.string().min(1), // Circle Developer-Controlled Wallets
+  CIRCLE_ENTITY_SECRET: z.string().min(1),
+  CHAIN_ENV: z.enum(["testnet", "mainnet"]).default("testnet"), // controls which Circle blockchain to use
+  ALLOWED_ORIGINS: z.string().min(1), // cors allow
+  DATABASE_URL: z.string().url(),
 });
 
 const parsed = envSchema.safeParse(process.env);
