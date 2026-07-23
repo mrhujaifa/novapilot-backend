@@ -1,12 +1,15 @@
 model Wallet {
-    id        String     @id @default(uuid())
-    userId    String
-    user      User       @relation(fields: [userId], references: [id])
-    address   String // checksum address
-    network   NetworkEnv
-    isPrimary Boolean    @default(true) // একাধিক wallet থাকলে কোনটা deposit-এর জন্য primary
-    createdAt DateTime   @default(now())
+    id             String     @id @default(uuid())
+    userId         String
+    user           User       @relation(fields: [userId], references: [id])
+    circleWalletId String     @unique // Circle প্রতি network-এ আলাদা wallet বানায়, তাই এখানে (User-এ না)
+    address        String // checksum on-chain address
+    network        NetworkEnv
+    createdAt      DateTime   @default(now())
 
-    @@unique([address, network]) // একই address একই network-এ একবারই থাকবে
+    deposits Deposit[]
+
+    @@unique([address, network])
+    @@unique([userId, network]) // এক user-এর network-প্রতি একটাই Circle wallet — এটাই source of truth
     @@index([userId])
 }

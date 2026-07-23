@@ -1,0 +1,5 @@
+model AiProvider {
+    id     String    @id @default(uuid())
+    name   String    @unique // "anthropic", "openai", "google", "xai"
+    models AiModel[]
+}

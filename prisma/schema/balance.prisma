@@ -8,8 +8,8 @@ model Balance {
     userId    String
     user      User       @relation(fields: [userId], references: [id])
     network   NetworkEnv
-    amount    Decimal    @db.Decimal(18, 6) // USDC 6 decimal precision
+    amount    Decimal    @db.Decimal(18, 6)
     updatedAt DateTime   @updatedAt
 
-    @@unique([userId, network]) // per-network একটাই balance row per user
+    @@unique([userId, network])
 }

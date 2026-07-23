@@ -1,20 +1,14 @@
-model AiProvider {
-    id     String    @id @default(uuid())
-    name   String    @unique // "anthropic", "openai", "google", "xai"
-    models AiModel[]
-}
-
 model AiModel {
-    id               String     @id @default(uuid())
-    providerId       String
-    provider         AiProvider @relation(fields: [providerId], references: [id])
-    modelKey         String // provider-এর actual model string, e.g. "claude-sonnet-4-6"
-    displayName      String
-    inputPricePer1M  Decimal    @db.Decimal(10, 4) // USDC per 1M input tokens
-    outputPricePer1M Decimal    @db.Decimal(10, 4)
-    isActive         Boolean    @default(true)
+    id           String     @id @default(uuid())
+    aiProviderId String
+    aiProvider   AiProvider @relation(fields: [aiProviderId], references: [id])
+    modelName    String
+    displayName  String
+    isActive     Boolean    @default(true)
+    createdAt    DateTime   @default(now())
 
-    usageLogs UsageLog[]
+    pricingHistory ModelPricing[]
 
-    @@unique([providerId, modelKey])
+    @@unique([aiProviderId, modelName])
+    @@index([isActive])
 }

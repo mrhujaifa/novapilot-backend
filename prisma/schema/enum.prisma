@@ -1,0 +1,10 @@
+enum TransactionStatus {
+    PENDING
+    CONFIRMED
+    FAILED
+}
+
+enum TransactionType {
+    CREDIT
+    DEBIT
+}

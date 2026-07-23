@@ -1,24 +1,13 @@
-enum TransactionType {
-    DEPOSIT
-    USAGE
-}
-
-enum TransactionStatus {
-    PENDING
-    CONFIRMED
-    FAILED
-}
-
 model Transaction {
-    id           String            @id @default(uuid())
-    userId       String
-    user         User              @relation(fields: [userId], references: [id])
-    network      NetworkEnv
-    type         TransactionType
-    amount       Decimal           @db.Decimal(18, 6) // DEPOSIT হলে +, USAGE হলে -
-    balanceAfter Decimal           @db.Decimal(18, 6) // audit-এর জন্য, তখনকার balance snapshot
-    status       TransactionStatus @default(CONFIRMED)
-    createdAt    DateTime          @default(now())
+    id             String          @id @default(uuid())
+    userId         String
+    idempotencyKey String?         @unique
+    user           User            @relation(fields: [userId], references: [id])
+    network        NetworkEnv
+    type           TransactionType
+    amountUsdc     Decimal         @db.Decimal(18, 6)
+    balanceAfter   Decimal         @db.Decimal(18, 6)
+    createdAt      DateTime        @default(now())
 
     depositId String?  @unique
     deposit   Deposit? @relation(fields: [depositId], references: [id])
@@ -27,4 +16,5 @@ model Transaction {
     usageLog   UsageLog? @relation(fields: [usageLogId], references: [id])
 
     @@index([userId])
+    @@index([createdAt])
 }

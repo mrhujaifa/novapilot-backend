@@ -1,16 +1,17 @@
 model Deposit {
     id          String            @id @default(uuid())
     userId      String
+    user        User              @relation(fields: [userId], references: [id])
     walletId    String
-    network     NetworkEnv
+    wallet      Wallet            @relation(fields: [walletId], references: [id])
     txHash      String
     amount      Decimal           @db.Decimal(18, 6)
     status      TransactionStatus @default(PENDING)
     confirmedAt DateTime?
     createdAt   DateTime          @default(now())
 
-    transaction Transaction? // one-to-one link, deposit confirm হলে ledger entry বসবে
+    transaction Transaction?
 
-    @@unique([txHash, network]) // একই tx hash duplicate process ঠেকাতে
+    @@unique([txHash]) // network এখন Wallet থেকে derive হয়, তাই শুধু txHash-ই যথেষ্ট গ্লোবালি unique রাখতে
     @@index([userId])
 }

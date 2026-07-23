@@ -1,5 +1,7 @@
-import rateLimit from "express-rate-limit";
+import { rateLimit } from "express-rate-limit";
 import { StatusCodes } from "http-status-codes";
+import RedisStore from "rate-limit-redis";
+import { redisClient } from "../lib/redis";
 
 // limit request per IP, so no one can spam the auth endpoint
 export const authRateLimiter = rateLimit({
@@ -16,4 +18,19 @@ export const authRateLimiter = rateLimit({
       message: "Too many requests, please try again later",
     });
   },
+});
+
+// Scoped to authenticated user, not IP — one wallet shouldn't be able to
+// starve other users' quota, and a shared NAT/IP shouldn't rate-limit unrelated users.
+export const deductRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // max 60 deduct calls per user per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id ?? req.ip ?? "anonymous",
+  store: new RedisStore({
+    sendCommand: (...args: string[]) => redisClient.sendCommand(args),
+    prefix: "rl:billing:deduct:",
+  }),
+  message: { success: false, status: 429, message: "Too many billing requests, slow down" },
 });
