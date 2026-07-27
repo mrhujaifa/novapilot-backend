@@ -7,10 +7,10 @@ import { env } from "./config/env.config";
 import { AuthRoutes } from "./modules/auth/auth.routes";
 import { billingRouter } from "./modules/billing/billing.route";
 import { modelsRouter } from "./modules/models/models.route";
-import { aiRouterRouter } from "./modules/agent/ai-router.route";
 import { globalErrorHandler } from "./errors/global-error-handler";
 import { logger } from "./lib/logger";
 import { reconcilePendingSettlements } from "./modules/jobs/sweep-reconciliation.job";
+import { AiRouters } from "./modules/agent/ai-router.route";
 
 export const app = express();
 
@@ -56,7 +56,6 @@ setInterval(
 app.use(AuthRoutes);
 app.use(billingRouter);
 app.use(modelsRouter);
-app.use(aiRouterRouter);
-
+app.use("/api/chat", AiRouters);
 // Global Error Handler (must be last)
 app.use(globalErrorHandler);

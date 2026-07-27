@@ -1,13 +1,13 @@
 model User {
-  id            String        @id @default(uuid())
-  privyUserId   String        @unique
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id            String         @id @default(uuid())
+  privyUserId   String         @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   balances      Balance[]
-  chatHistories ChatHistory[]
   deposits      Deposit[]
   transactions  Transaction[]
   usageLogs     UsageLog[]
   wallets       Wallet[]
   settlements   Settlement[]
+  conversations Conversation[]
 }

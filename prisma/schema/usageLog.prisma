@@ -1,17 +1,18 @@
 model UsageLog {
-  id             String       @id @default(uuid())
+  id             String     @id @default(uuid())
   userId         String
   network        NetworkEnv
   modelPricingId String
   inputTokens    Int
   outputTokens   Int
-  costUsdc       Decimal      @db.Decimal(18, 6)
-  createdAt      DateTime     @default(now())
-  chatHistory    ChatHistory?
-  transaction    Transaction?
-  modelPricing   ModelPricing @relation(fields: [modelPricingId], references: [id])
-  user           User         @relation(fields: [userId], references: [id])
-  settlement     Settlement[]
+  costUsdc       Decimal    @db.Decimal(18, 6)
+  createdAt      DateTime   @default(now())
+
+  transaction  Transaction?
+  modelPricing ModelPricing @relation(fields: [modelPricingId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  settlement   Settlement[]
+  message      Message?
 
   @@index([userId])
   @@index([createdAt])
