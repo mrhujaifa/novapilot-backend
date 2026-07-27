@@ -1,49 +1,25 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { logger } from "../lib/logger";
 
-// Circle public key cache (এক request-এ বার বার fetch না করার জন্য)
-let cachedPublicKey: string | null = null;
-let cacheExpiresAt = 0;
-
-async function getCirclePublicKey(): Promise<string> {
-  const now = Date.now();
-  if (cachedPublicKey && now < cacheExpiresAt) {
-    return cachedPublicKey;
-  }
-
-  const res = await fetch("https://api.circle.com/v2/notifications/publicKey", {
-    headers: { Authorization: `Bearer ${process.env.CIRCLE_API_KEY}` },
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch Circle public key: ${res.status}`);
-  }
-
-  const data = await res.json();
-  cachedPublicKey = data.data.publicKey;
-  cacheExpiresAt = now + 60 * 60 * 1000; // ১ ঘন্টা cache
-
-  return cachedPublicKey!;
-}
-
-/**
- * Circle webhook signature verify করে raw body-র উপর।
- * Signature header: "X-Circle-Signature" (base64 ECDSA signature)
- */
-export async function verifyCircleWebhook(req: Request, res: Response, next: NextFunction) {
+export async function verifyCircleWebhook(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const signature = req.headers["x-circle-signature"] as string | undefined;
-    const rawBody = (req as any).rawBody as Buffer | undefined; // express.json()-এ verify hook দিয়ে সেট করা লাগবে
+    const keyId = req.headers["x-circle-key-id"] as string | undefined; // ১. হেডার থেকে keyId সংগ্রহ করা হলো
+    const rawBody = (req as any).rawBody as Buffer | undefined;
 
-    if (!signature || !rawBody) {
-      logger.warn("Missing Circle webhook signature or raw body");
-      res.status(401).json({ error: "Missing signature" });
+    if (!signature || !keyId || !rawBody) {
+      logger.warn("Missing Circle webhook signature, key ID, or raw body");
+      res.status(401).json({ error: "Missing signature or key ID" });
       return;
     }
 
-    const publicKey = await getCirclePublicKey();
+    // ২. এখানে keyId পাস করা হয়েছে
+    const publicKey = await getCirclePublicKey(keyId);
 
     const verifier = crypto.createVerify("SHA256");
     verifier.update(rawBody);
@@ -62,4 +38,26 @@ export async function verifyCircleWebhook(req: Request, res: Response, next: Nex
     logger.error({ err: error }, "Circle webhook verification failed");
     res.status(500).json({ error: "Webhook verification error" });
   }
+}
+
+async function getCirclePublicKey(keyId: string): Promise<crypto.KeyObject> {
+  const response = await fetch(`https://api.circle.com/v2/notifications/publicKey/${keyId}`, {
+    headers: {
+      Authorization: `Bearer ${process.env.CIRCLE_API_KEY}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Circle public key: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const publicKeyBase64 = data.data.publicKey;
+
+  // ৩. Circle-এর raw base64 কি-কে Node.js উপযোগী KeyObject-এ রূপান্তর করা হলো
+  return crypto.createPublicKey({
+    key: Buffer.from(publicKeyBase64, "base64"),
+    format: "der",
+    type: "spki",
+  });
 }

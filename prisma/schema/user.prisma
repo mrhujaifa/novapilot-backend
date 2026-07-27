@@ -1,12 +1,13 @@
 model User {
-    id          String   @id @default(uuid())
-    privyUserId String   @unique // Privy identity — শুধু login/auth-এর জন্য
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
-
-    wallets      Wallet[]
-    balances     Balance[]
-    deposits     Deposit[]
-    usageLogs    UsageLog[]
-    transactions Transaction[]
+  id            String        @id @default(uuid())
+  privyUserId   String        @unique
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  balances      Balance[]
+  chatHistories ChatHistory[]
+  deposits      Deposit[]
+  transactions  Transaction[]
+  usageLogs     UsageLog[]
+  wallets       Wallet[]
+  settlements   Settlement[]
 }

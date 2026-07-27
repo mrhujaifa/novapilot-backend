@@ -1,17 +1,18 @@
 model UsageLog {
-    id             String       @id @default(uuid())
-    userId         String
-    user           User         @relation(fields: [userId], references: [id])
-    network        NetworkEnv // যোগ করা হলো — কোন network-এর balance কাটা হলো
-    modelPricingId String
-    modelPricing   ModelPricing @relation(fields: [modelPricingId], references: [id])
-    inputTokens    Int
-    outputTokens   Int
-    costUsdc       Decimal      @db.Decimal(18, 6)
-    createdAt      DateTime     @default(now())
+  id             String       @id @default(uuid())
+  userId         String
+  network        NetworkEnv
+  modelPricingId String
+  inputTokens    Int
+  outputTokens   Int
+  costUsdc       Decimal      @db.Decimal(18, 6)
+  createdAt      DateTime     @default(now())
+  chatHistory    ChatHistory?
+  transaction    Transaction?
+  modelPricing   ModelPricing @relation(fields: [modelPricingId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+  settlement     Settlement[]
 
-    transaction Transaction?
-
-    @@index([userId])
-    @@index([createdAt])
+  @@index([userId])
+  @@index([createdAt])
 }

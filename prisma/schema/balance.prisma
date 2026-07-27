@@ -1,15 +1,16 @@
-enum NetworkEnv {
-    TESTNET
-    MAINNET
+model Balance {
+  id                 String     @id @default(uuid())
+  userId             String
+  network            NetworkEnv
+  amount             Decimal    @db.Decimal(18, 6)
+  pendingSweepAmount Decimal    @default(0) @db.Decimal(18, 6)
+  updatedAt          DateTime   @updatedAt
+  user               User       @relation(fields: [userId], references: [id])
+
+  @@unique([userId, network])
 }
 
-model Balance {
-    id        String     @id @default(uuid())
-    userId    String
-    user      User       @relation(fields: [userId], references: [id])
-    network   NetworkEnv
-    amount    Decimal    @db.Decimal(18, 6)
-    updatedAt DateTime   @updatedAt
-
-    @@unique([userId, network])
+enum NetworkEnv {
+  TESTNET
+  MAINNET
 }

@@ -5,6 +5,11 @@ import { AppError } from "../../utils/AppError";
 import { StatusCodes } from "http-status-codes";
 import { createCircleWallet } from "../wallet/wallet.service";
 import { User } from "../../generated/prisma/client";
+import { env } from "../../config/env.config";
+import type { NetworkEnv } from "../../generated/prisma/enums";
+import { initializeBalance } from "../billing/balance-init.service";
+
+const CURRENT_NETWORK: NetworkEnv = env.CHAIN_ENV === "mainnet" ? "MAINNET" : "TESTNET";
 
 // step 1: verify Privy token, return the userId (Privy DID) inside it
 export async function verifyIdentity(token: string): Promise<string> {
@@ -17,7 +22,7 @@ export async function verifyIdentity(token: string): Promise<string> {
   }
 }
 
-// step 2: find existing user by Privy id, or create a new row (wallet fields empty at first)
+// step 2: find existing user by Privy id, or create a new row
 export async function findOrCreateUser(privyUserId: string): Promise<User> {
   return prisma.user.upsert({
     where: { privyUserId },
@@ -26,36 +31,64 @@ export async function findOrCreateUser(privyUserId: string): Promise<User> {
   });
 }
 
-// step 3: ensure user has a Circle wallet, race-condition safe
-// uses a Postgres row lock so two concurrent requests for the same user
-// cannot both pass the "no wallet yet" check at the same time
-export async function ensureWallet(userId: string): Promise<User> {
-  // everything inside this transaction runs against a locked row
-  return prisma.$transaction(async (tx) => {
-    // FOR UPDATE locks this user's row until the transaction ends
-    // any other transaction trying to read/lock the same row will wait here
-    const [lockedUser] = await tx.$queryRaw<User[]>`
-      SELECT * FROM "User" WHERE id = ${userId} FOR UPDATE
-    `;
+/**
+ * Ensures a user has a Circle wallet + initialized balance for the current network.
+ *
+ * Design notes:
+ * - The external Circle API call happens OUTSIDE any DB transaction/lock —
+ *   holding a Postgres row lock across a slow network call would exhaust the
+ *   connection pool under load. This is the classic "no I/O inside a DB
+ *   transaction" rule.
+ * - Duplicate-safety comes from the DB's unique constraint on
+ *   (userId, network), not from a lock. In the rare case where two concurrent
+ *   requests both pass the initial "no wallet yet" check and both call
+ *   Circle, the second DB insert will violate the unique constraint — we
+ *   catch that, discard the orphaned Circle wallet reference, and return the
+ *   winning row instead. This trades a rare orphaned Circle wallet for never
+ *   blocking the DB on external latency.
+ */
+export async function ensureWallet(userId: string) {
+  const existing = await prisma.wallet.findUnique({
+    where: { userId_network: { userId, network: CURRENT_NETWORK } },
+  });
+  if (existing) {
+    return existing;
+  }
 
-    if (!lockedUser) {
-      throw new AppError(StatusCodes.NOT_FOUND, "User not found");
-    }
+  const { circleWalletId, walletAddress } = await createCircleWallet(userId);
 
-    // second concurrent request will see this as already true, since it
-    // waited for the first transaction to commit before reaching this line
-    if (lockedUser.circleWalletId) {
-      return lockedUser; // wallet already exists, nothing to do
-    }
+  try {
+    const wallet = await prisma.$transaction(async (tx) => {
+      const created = await tx.wallet.create({
+        data: {
+          userId,
+          circleWalletId,
+          address: walletAddress,
+          network: CURRENT_NETWORK,
+        },
+      });
 
-    // only ONE request at a time can reach this point per user
-    const { circleWalletId, walletAddress } = await createCircleWallet(userId);
+      // Balance row must exist before any deposit/deduct call can succeed
+      await initializeBalance(userId, CURRENT_NETWORK);
 
-    const updatedUser = await tx.user.update({
-      where: { id: userId },
-      data: { circleWalletId, walletAddress },
+      return created;
     });
 
-    return updatedUser;
-  });
+    return wallet;
+  } catch (err) {
+    // Unique constraint violation (P2002) — another concurrent request won the race.
+    // The Circle wallet we just created is orphaned (never persisted), which is an
+    // acceptable, rare trade-off. Return the row that actually made it into the DB.
+    const existingAfterRace = await prisma.wallet.findUnique({
+      where: { userId_network: { userId, network: CURRENT_NETWORK } },
+    });
+    if (existingAfterRace) {
+      logger.warn(
+        { userId, orphanedCircleWalletId: circleWalletId },
+        "Lost wallet-creation race — discarding orphaned Circle wallet",
+      );
+      return existingAfterRace;
+    }
+    throw err;
+  }
 }

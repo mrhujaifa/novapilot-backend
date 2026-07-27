@@ -1,13 +1,13 @@
 model ModelPricing {
-    id              String    @id @default(uuid())
-    aiModelId       String
-    aiModel         AiModel   @relation(fields: [aiModelId], references: [id])
-    inputPricePerM  Decimal   @db.Decimal(10, 6)
-    outputPricePerM Decimal   @db.Decimal(10, 6)
-    effectiveFrom   DateTime  @default(now())
-    effectiveTo     DateTime?
+  id              String        @id @default(uuid())
+  aiModelId       String
+  inputPricePerM  Decimal       @db.Decimal(10, 6)
+  outputPricePerM Decimal       @db.Decimal(10, 6)
+  effectiveFrom   DateTime      @default(now())
+  effectiveTo     DateTime?
+  chatHistories   ChatHistory[]
+  aiModel         AiModel       @relation(fields: [aiModelId], references: [id])
+  usageLogs       UsageLog[]
 
-    usageLogs UsageLog[]
-
-    @@index([aiModelId, effectiveFrom])
+  @@index([aiModelId, effectiveFrom])
 }

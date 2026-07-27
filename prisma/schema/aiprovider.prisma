@@ -1,5 +1,6 @@
 model AiProvider {
-    id     String    @id @default(uuid())
-    name   String    @unique // "anthropic", "openai", "google", "xai"
-    models AiModel[]
+  id       String    @id @default(uuid())
+  name     String    @unique
+  isActive Boolean   @default(true)
+  models   AiModel[]
 }

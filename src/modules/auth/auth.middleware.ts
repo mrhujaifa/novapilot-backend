@@ -8,14 +8,14 @@ export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     privyUserId: string;
-    circleWalletId: string | null;
-    walletAddress: string | null;
+    circleWalletId: string;
+    walletAddress: string;
     network: string;
   };
 }
 
 // this middleware only orchestrates the flow, all real logic lives in auth.service.ts
-export const requireAuth = asyncHandler(
+export const requireAuth = asyncHandler<AuthenticatedRequest>(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
 
@@ -27,14 +27,14 @@ export const requireAuth = asyncHandler(
 
     const privyUserId = await verifyIdentity(token);
     const user = await findOrCreateUser(privyUserId);
-    const finalUser = await ensureWallet(user.id);
+    const wallet = await ensureWallet(user.id); // returns a Wallet row, not a User row
 
     req.user = {
-      id: finalUser.id,
-      privyUserId: finalUser.privyUserId,
-      circleWalletId: finalUser.circleWalletId,
-      walletAddress: finalUser.walletAddress,
-      network: finalUser.network,
+      id: user.id,
+      privyUserId: user.privyUserId,
+      circleWalletId: wallet.circleWalletId,
+      walletAddress: wallet.address, // Wallet model calls this field "address", not "walletAddress"
+      network: wallet.network,
     };
 
     next();

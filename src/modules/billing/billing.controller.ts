@@ -14,9 +14,20 @@ import {
   getBalanceQuerySchema,
   usageHistoryQuerySchema,
 } from "./billing.schema";
-
+import { mapCircleWebhookToDeposit, MappedDeposit } from "./circle-webhook.mapper";
+import { asyncHandler } from "../../utils/asyncHandler";
+import { successResponse } from "../../utils/apiResponse";
+import { AppError } from "../../utils/AppError";
 import { logger } from "../../lib/logger";
 
+// Type guard helper
+function isSkipped(
+  mapped: MappedDeposit | { skipped: true; reason: string },
+): mapped is { skipped: true; reason: string } {
+  return "skipped" in mapped;
+}
+
+// --- Existing handlers ---
 export const handleDeductUsage = asyncHandler(async (req: Request, res: Response) => {
   const body = deductUsageSchema.parse(req.body);
   const userId = req.user!.id;
@@ -60,32 +71,39 @@ export const handleGetUsageHistory = asyncHandler(async (req: Request, res: Resp
   return successResponse(res, result);
 });
 
-import { mapCircleWebhookToDeposit } from "./circle-webhook.mapper";
-import { asyncHandler } from "../../utils/asyncHandler";
-import { successResponse } from "../../utils/apiResponse";
-import { AppError } from "../../utils/AppError";
-
 export const handleGetDepositAddress = asyncHandler(async (req: Request, res: Response) => {
-  const query = getBalanceQuerySchema.parse(req.query); // reuse — same shape { network }
+  const query = getBalanceQuerySchema.parse(req.query);
   const userId = req.user!.id;
 
   const address = await getDepositAddress(userId, query.network);
   return successResponse(res, { address, network: query.network });
 });
 
-// Assumes Circle signature already verified upstream (verifyCircleWebhook middleware)
 export const handleDepositWebhook = asyncHandler(async (req: Request, res: Response) => {
-  const { userId, walletId, network, txHash, amount } = await mapCircleWebhookToDeposit(req.body);
-
   try {
-    const result = await creditDeposit({ userId, walletId, network, txHash, amount });
-    return successResponse(res, result);
+    const result = await mapCircleWebhookToDeposit(req.body);
+
+    if (result.type === "skipped") {
+      logger.info({ reason: result.reason }, "Circle webhook skipped");
+      return successResponse(res, { status: "ignored", reason: result.reason });
+    }
+
+    if (result.type === "sweep_update") {
+      return successResponse(res, { status: "sweep_updated" });
+    }
+
+    // result.type === "deposit"
+    const { userId, walletId, network, txHash, amount } = result.data;
+    logger.info({ userId, network, txHash, amount }, "Calling creditDeposit");
+    const depositResult = await creditDeposit({ userId, walletId, network, txHash, amount });
+    logger.info({ txHash }, "creditDeposit done");
+    return successResponse(res, depositResult);
   } catch (error) {
     if (error instanceof DuplicateDepositError) {
-      // Webhook retries should be idempotent, not treated as failure
       logger.warn({ err: error }, "Duplicate deposit webhook");
       return successResponse(res, { status: "already_processed" });
     }
-    throw error;
+    logger.error({ err: error }, "Webhook processing failed, but ack to Circle");
+    return successResponse(res, { status: "error_logged_internally" });
   }
 });

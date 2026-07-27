@@ -4,6 +4,7 @@ import { logger } from "../../lib/logger";
 import { prisma } from "../../lib/prisma";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../utils/AppError";
+import { Decimal } from "../../generated/prisma/internal/prismaNamespace";
 
 export class InsufficientBalanceError extends Error {
   constructor(userId: string, required: string, available: string) {
@@ -19,6 +20,8 @@ export class DuplicateDepositError extends Error {
   }
 }
 
+const SWEEP_THRESHOLD_USDC = new Decimal(process.env.SWEEP_THRESHOLD_USDC ?? "0.20");
+
 interface DeductUsageInput {
   userId: string;
   network: NetworkEnv;
@@ -28,19 +31,21 @@ interface DeductUsageInput {
   idempotencyKey: string;
 }
 
-interface DeductUsageResult {
+export interface DeductUsageResult {
   usageLogId: string;
   costUsdc: string;
   balanceAfter: string;
+  sweepTriggered: boolean;
+  sweepAmount?: string;
 }
 
 // $queryRaw-এর জন্য আলাদা named type — inline generic object-type ব্যবহার করলে
 // tagged-template syntax কখনো কখনো formatter/parser-এ ভেঙে যেতে পারে (এই ফাইলে যেটা হয়েছিল)।
-interface BalanceRow {
+type BalanceRow = {
   id: string;
-  amount: Prisma.Decimal;
-}
-
+  amount: Decimal;
+  pendingSweepAmount: Decimal;
+};
 /**
  * AI request-এর token usage থেকে cost calculate করে balance থেকে deduct করে।
  * পুরোটা atomic transaction — balance check, deduct, log, ledger সব একসাথে বা কিছুই না।
@@ -49,22 +54,24 @@ export async function deductUsage(input: DeductUsageInput): Promise<DeductUsageR
   const { userId, network, modelPricingId, inputTokens, outputTokens, idempotencyKey } = input;
 
   return prisma.$transaction(async (tx) => {
-    // If this exact request already succeeded, return the prior result instead of deducting again
+    // ── idempotency check ─────────────────────────────────────────────────
     const existingTx = await tx.transaction.findUnique({
       where: { idempotencyKey },
       include: { usageLog: true },
     });
-    if (existingTx && existingTx.usageLog) {
+    if (existingTx?.usageLog) {
       return {
         usageLogId: existingTx.usageLog.id,
         costUsdc: existingTx.usageLog.costUsdc.toString(),
         balanceAfter: existingTx.balanceAfter.toString(),
+        sweepTriggered: false, // already processed — no double sweep
       };
     }
 
-    // Row lock — concurrency-safe, network-scoped
+    // ── row lock ──────────────────────────────────────────────────────────
     const balanceRows = await tx.$queryRaw<BalanceRow[]>`
-      SELECT id, amount FROM "Balance"
+      SELECT id, amount, "pendingSweepAmount"
+      FROM "Balance"
       WHERE "userId" = ${userId} AND network = ${network}::"NetworkEnv"
       FOR UPDATE
     `;
@@ -74,6 +81,7 @@ export async function deductUsage(input: DeductUsageInput): Promise<DeductUsageR
     }
     const balance = balanceRows[0];
 
+    // ── pricing ───────────────────────────────────────────────────────────
     const pricing = await tx.modelPricing.findUniqueOrThrow({
       where: { id: modelPricingId },
       include: { aiModel: true },
@@ -97,22 +105,23 @@ export async function deductUsage(input: DeductUsageInput): Promise<DeductUsageR
       throw new InsufficientBalanceError(userId, totalCost.toString(), balance.amount.toString());
     }
 
+    // ── sweep threshold check (atomic) ────────────────────────────────────
     const newBalance = balance.amount.sub(totalCost);
+    const newPendingSweep = balance.pendingSweepAmount.add(totalCost);
+    const shouldSweep = newPendingSweep.gte(SWEEP_THRESHOLD_USDC);
 
     await tx.balance.update({
       where: { id: balance.id },
-      data: { amount: newBalance },
+      data: {
+        amount: newBalance,
+        // Reset atomically if sweep fires — prevents double-sweep on next request
+        pendingSweepAmount: shouldSweep ? new Decimal(0) : newPendingSweep,
+      },
     });
 
+    // ── usage log + ledger tx ─────────────────────────────────────────────
     const usageLog = await tx.usageLog.create({
-      data: {
-        userId,
-        network,
-        modelPricingId,
-        inputTokens,
-        outputTokens,
-        costUsdc: totalCost,
-      },
+      data: { userId, network, modelPricingId, inputTokens, outputTokens, costUsdc: totalCost },
     });
 
     await tx.transaction.create({
@@ -128,7 +137,14 @@ export async function deductUsage(input: DeductUsageInput): Promise<DeductUsageR
     });
 
     logger.info(
-      { userId, network, usageLogId: usageLog.id, cost: totalCost.toString() },
+      {
+        userId,
+        network,
+        usageLogId: usageLog.id,
+        cost: totalCost.toString(),
+        pendingSweep: newPendingSweep.toString(),
+        sweepTriggered: shouldSweep,
+      },
       "Usage deducted",
     );
 
@@ -136,6 +152,8 @@ export async function deductUsage(input: DeductUsageInput): Promise<DeductUsageR
       usageLogId: usageLog.id,
       costUsdc: totalCost.toString(),
       balanceAfter: newBalance.toString(),
+      sweepTriggered: shouldSweep,
+      sweepAmount: shouldSweep ? newPendingSweep.toString() : undefined,
     };
   });
 }
@@ -157,30 +175,119 @@ interface CreditDepositResult {
  * Circle webhook থেকে confirmed deposit আসলে balance credit করে।
  * txHash unique constraint দিয়ে duplicate webhook delivery ঠেকানো হয়।
  */
+// export async function creditDeposit(input: CreditDepositInput): Promise<CreditDepositResult> {
+//   const { userId, walletId, network, txHash, amount } = input;
+//   const depositAmount = new Prisma.Decimal(amount);
+
+//   return prisma.$transaction(async (tx) => {
+//     // Duplicate check — একই tx hash আগে process হয়ে থাকলে থামিয়ে দেওয়া
+//     const existing = await tx.deposit.findUnique({ where: { txHash } });
+//     if (existing) {
+//       throw new DuplicateDepositError(txHash);
+//     }
+
+//     // Balance row lock (upsert না — row না থাকলে সেটা নিজেই একটা bug signal, silent create করব না)
+//     const balanceRows = await tx.$queryRaw<BalanceRow[]>`
+//       SELECT id, amount FROM "Balance"
+//       WHERE "userId" = ${userId} AND network = ${network}::"NetworkEnv"
+//       FOR UPDATE
+//     `;
+
+//     if (balanceRows.length === 0) {
+//       throw new Error(`Balance not found for user ${userId} on ${network}`);
+//     }
+//     const balance = balanceRows[0];
+//     const newBalance = balance.amount.add(depositAmount);
+
+//     const deposit = await tx.deposit.create({
+//       data: {
+//         userId,
+//         walletId,
+//         txHash,
+//         amount: depositAmount,
+//         status: "CONFIRMED",
+//         confirmedAt: new Date(),
+//       },
+//     });
+
+//     await tx.balance.update({
+//       where: { id: balance.id },
+//       data: { amount: newBalance },
+//     });
+
+//     await tx.transaction.create({
+//       data: {
+//         userId,
+//         network,
+//         type: "CREDIT",
+//         amountUsdc: depositAmount,
+//         balanceAfter: newBalance,
+//         depositId: deposit.id,
+//       },
+//     });
+
+//     logger.info(
+//       { userId, network, depositId: deposit.id, amount: depositAmount.toString() },
+//       "Deposit credited",
+//     );
+
+//     return {
+//       depositId: deposit.id,
+//       balanceAfter: newBalance.toString(),
+//     };
+//   });
+// }
+
+// শুধুমাত্র creditDeposit অংশটা দিচ্ছি, বাকি service ঠিক আছে।
+// সম্পূর্ণ ফাইল তুমি আগের মতই রাখবে, শুধু creditDeposit ফাংশনটা বদলে নিচেরটা দেবে।
+
 export async function creditDeposit(input: CreditDepositInput): Promise<CreditDepositResult> {
   const { userId, walletId, network, txHash, amount } = input;
   const depositAmount = new Prisma.Decimal(amount);
 
   return prisma.$transaction(async (tx) => {
-    // Duplicate check — একই tx hash আগে process হয়ে থাকলে থামিয়ে দেওয়া
-    const existing = await tx.deposit.findUnique({ where: { txHash } });
-    if (existing) {
-      throw new DuplicateDepositError(txHash);
+    // 1) Idempotency / duplicate delivery protection
+    const existingDeposit = await tx.deposit.findUnique({ where: { txHash } });
+    if (existingDeposit) {
+      return {
+        depositId: existingDeposit.id,
+        balanceAfter: existingDeposit.amount.toString(), // or fetch from transaction/deposit table if needed
+      };
     }
 
-    // Balance row lock (upsert না — row না থাকলে সেটা নিজেই একটা bug signal, silent create করব না)
-    const balanceRows = await tx.$queryRaw<BalanceRow[]>`
+    // 2) Ensure balance row exists
+    await tx.balance.upsert({
+      where: { userId_network: { userId, network } },
+      update: {},
+      create: {
+        userId,
+        network,
+        amount: 0,
+        pendingSweepAmount: 0,
+      },
+    });
+
+    // 3) Lock the row and re-read it inside the transaction
+    const lockedRows = await tx.$queryRaw<BalanceRow[]>`
       SELECT id, amount FROM "Balance"
       WHERE "userId" = ${userId} AND network = ${network}::"NetworkEnv"
       FOR UPDATE
     `;
 
-    if (balanceRows.length === 0) {
+    if (lockedRows.length === 0) {
       throw new Error(`Balance not found for user ${userId} on ${network}`);
     }
-    const balance = balanceRows[0];
+
+    const balance = lockedRows[0];
     const newBalance = balance.amount.add(depositAmount);
 
+    // 4) Update balance
+    await tx.balance.update({
+      where: { id: balance.id },
+      data: { amount: newBalance },
+    });
+
+    // 5) Create deposit
     const deposit = await tx.deposit.create({
       data: {
         userId,
@@ -192,11 +299,7 @@ export async function creditDeposit(input: CreditDepositInput): Promise<CreditDe
       },
     });
 
-    await tx.balance.update({
-      where: { id: balance.id },
-      data: { amount: newBalance },
-    });
-
+    // 6) Create transaction ledger entry
     await tx.transaction.create({
       data: {
         userId,
@@ -208,18 +311,12 @@ export async function creditDeposit(input: CreditDepositInput): Promise<CreditDe
       },
     });
 
-    logger.info(
-      { userId, network, depositId: deposit.id, amount: depositAmount.toString() },
-      "Deposit credited",
-    );
-
     return {
       depositId: deposit.id,
       balanceAfter: newBalance.toString(),
     };
   });
 }
-
 /**
  * Dashboard/balance-check-এর জন্য — শুধু read, lock লাগবে না।
  */

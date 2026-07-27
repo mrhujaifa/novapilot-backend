@@ -5,7 +5,10 @@ declare global {
     interface Request {
       user?: {
         id: string;
-        walletAddress?: string;
+        privyUserId: string;
+        circleWalletId: string | null;
+        walletAddress: string | null;
+        network: string;
       };
     }
   }

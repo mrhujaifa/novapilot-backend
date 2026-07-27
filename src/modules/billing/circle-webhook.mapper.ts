@@ -1,25 +1,26 @@
+// src/modules/billing/circle-webhook.mapper.ts
+
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../utils/AppError";
+import { logger } from "../../lib/logger";
+import { handleTransactionComplete } from "./circle-webhook.handler";
 
-// Circle's notification payload shape (transaction/transfer event).
-// Reference: Circle Developer-Controlled Wallets notification schema.
-// Adjust field names here if Circle's actual payload differs from this — this is the
-// single place that should change, nothing else in the codebase depends on Circle's raw shape.
 const circleWebhookPayloadSchema = z.object({
-  notificationType: z.string(), // e.g. "transactions.inbound"
+  notificationType: z.string(),
   notification: z.object({
-    id: z.string(), // Circle transaction id
-    walletId: z.string(), // Circle wallet id — maps to our Wallet.circleWalletId
-    blockchain: z.string(), // e.g. "ETH-SEPOLIA", "MATIC-AMOY" — used to derive our NetworkEnv
-    txHash: z.string(),
-    amounts: z.array(z.string()), // Circle returns amounts as string array, USDC is first entry
-    state: z.string(), // "COMPLETE" | "PENDING" | "FAILED"
+    id: z.string(),
+    walletId: z.string().optional(),
+    blockchain: z.string(),
+    txHash: z.string().optional(),
+    amounts: z.array(z.string()).optional(),
+    amount: z.string().optional(),
+    state: z.string(),
   }),
 });
 
-interface MappedDeposit {
+export interface MappedDeposit {
   userId: string;
   walletId: string;
   network: "TESTNET" | "MAINNET";
@@ -27,32 +28,52 @@ interface MappedDeposit {
   amount: string;
 }
 
-// Circle blockchain identifiers -> our internal NetworkEnv.
-// Testnet-first: everything not explicitly mainnet maps to TESTNET.
-const MAINNET_BLOCKCHAINS = new Set(["ETH", "MATIC", "AVAX", "ARB"]);
+type WebhookResult =
+  | { type: "deposit"; data: MappedDeposit }
+  | { type: "sweep_update"; handled: true }
+  | { type: "skipped"; reason: string };
 
-function toNetworkEnv(blockchain: string): "TESTNET" | "MAINNET" {
-  const base = blockchain.split("-")[0];
-  return MAINNET_BLOCKCHAINS.has(base) ? "MAINNET" : "TESTNET";
-}
+export async function mapCircleWebhookToDeposit(rawBody: unknown): Promise<WebhookResult> {
+  logger.info({ payload: rawBody }, "Circle webhook received");
 
-/**
- * Validates and transforms a raw Circle webhook payload into our internal deposit shape.
- * Throws AppError(400) if the payload doesn't match Circle's expected schema,
- * or AppError(404) if the wallet isn't tracked in our database.
- */
-export async function mapCircleWebhookToDeposit(rawBody: unknown): Promise<MappedDeposit> {
   const parsed = circleWebhookPayloadSchema.safeParse(rawBody);
   if (!parsed.success) {
+    logger.error({ error: parsed.error }, "Circle webhook payload validation failed");
     throw new AppError(StatusCodes.BAD_REQUEST, "Invalid Circle webhook payload shape");
   }
 
-  const { notification } = parsed.data;
+  const { notificationType, notification } = parsed.data;
 
-  if (notification.state !== "COMPLETE") {
-    // Only credit on confirmed transfers; PENDING/FAILED are ignored here.
-    // Circle will send a follow-up webhook once state changes to COMPLETE.
-    throw new AppError(StatusCodes.OK, "Deposit not yet confirmed, ignoring");
+  // ── Outbound sweep transfer notification ─────────────────────────────────
+  // Circle sends these for our triggerSweep() calls — identify and finalize settlement
+  if (
+    notificationType === "transactions.outbound" ||
+    notificationType === "transactions.transfer"
+  ) {
+    const terminalStates = ["COMPLETE", "FAILED", "CANCELLED", "DENIED"] as const;
+    type TerminalState = (typeof terminalStates)[number];
+
+    const isTerminal = (terminalStates as readonly string[]).includes(notification.state);
+
+    if (isTerminal && notification.id && notification.txHash) {
+      await handleTransactionComplete({
+        circleTransferId: notification.id,
+        txHash: notification.txHash,
+        state: notification.state as TerminalState,
+      });
+      return { type: "sweep_update", handled: true };
+    }
+
+    // Non-terminal (INITIATED, PENDING) — no action needed yet
+    return {
+      type: "skipped",
+      reason: `outbound_tx_non_terminal_state:${notification.state}`,
+    };
+  }
+
+  // ── Inbound deposit notification ─────────────────────────────────────────
+  if (!notification.walletId) {
+    return { type: "skipped", reason: "no_walletId_on_notification" };
   }
 
   const wallet = await prisma.wallet.findUnique({
@@ -60,22 +81,31 @@ export async function mapCircleWebhookToDeposit(rawBody: unknown): Promise<Mappe
   });
 
   if (!wallet) {
-    throw new AppError(
-      StatusCodes.NOT_FOUND,
-      `No wallet found for Circle walletId ${notification.walletId}`,
+    // Could be admin wallet receiving the sweep — skip silently
+    logger.info(
+      { walletId: notification.walletId },
+      "Webhook: no matching user wallet found, skipping",
     );
+    return { type: "skipped", reason: "wallet_not_found" };
   }
 
-  const amount = notification.amounts[0];
+  const amount = notification.amounts?.[0] ?? notification.amount;
   if (!amount) {
     throw new AppError(StatusCodes.BAD_REQUEST, "Webhook payload missing amount");
   }
 
+  if (!notification.txHash) {
+    return { type: "skipped", reason: "no_txHash_yet" };
+  }
+
   return {
-    userId: wallet.userId,
-    walletId: wallet.id,
-    network: toNetworkEnv(notification.blockchain),
-    txHash: notification.txHash,
-    amount,
+    type: "deposit",
+    data: {
+      userId: wallet.userId,
+      walletId: wallet.id,
+      network: wallet.network,
+      txHash: notification.txHash,
+      amount,
+    },
   };
 }

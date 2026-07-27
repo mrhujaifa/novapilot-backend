@@ -1,34 +1,61 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
+
 import { env } from "./config/env.config";
-import { errorHandler } from "./middlewares/errorHandler";
-import { indexRouters } from "./routers";
+import { AuthRoutes } from "./modules/auth/auth.routes";
+import { billingRouter } from "./modules/billing/billing.route";
+import { modelsRouter } from "./modules/models/models.route";
+import { aiRouterRouter } from "./modules/agent/ai-router.route";
+import { globalErrorHandler } from "./errors/global-error-handler";
+import { logger } from "./lib/logger";
+import { reconcilePendingSettlements } from "./modules/jobs/sweep-reconciliation.job";
 
 export const app = express();
 
+// Security
 app.use(helmet());
-
-const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim());
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: env.ALLOWED_ORIGINS?.split(",") ?? [],
     credentials: true,
   }),
 );
 
+// Billing webhook (needs raw body)
 app.use(
-  "/api/billing/webhook",
   express.json({
     verify: (req, _res, buf) => {
-      (req as any).rawBody = buf;
+      (req as any).rawBody = buf; // সব route-এ rawBody থাকবে
     },
   }),
 );
+
+// JSON parser
 app.use(express.json());
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "NovaPilot API is running 🚀",
+    version: "1.0.0",
+  });
+});
 
-app.use("/api/v1/", indexRouters);
+setInterval(
+  () => {
+    reconcilePendingSettlements().catch((err) => {
+      logger.error({ err }, "Sweep reconciliation job failed");
+    });
+  },
+  5 * 60 * 1000,
+);
 
-app.use(errorHandler);
+// Routes
+app.use(AuthRoutes);
+app.use(billingRouter);
+app.use(modelsRouter);
+app.use(aiRouterRouter);
+
+// Global Error Handler (must be last)
+app.use(globalErrorHandler);

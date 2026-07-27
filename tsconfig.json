@@ -13,6 +13,6 @@
     "resolveJsonModule": true,
     "sourceMap": true
   },
-  "include": ["src", "prisma.config.ts"],
+  "include": ["src", "prisma.config.ts", "../frontend/src/privy-auth-token.ts"],
   "exclude": ["node_modules", "dist"]
 }

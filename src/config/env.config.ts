@@ -12,6 +12,14 @@ for (const envFile of envFiles) {
   }
 }
 
+// Treats an empty string the same as "not set" — .env files often have
+// blank placeholder lines (e.g. `ANTHROPIC_API_KEY=`) rather than omitting the key.
+const optionalKey = () =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v));
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().default(4000),
@@ -21,9 +29,22 @@ const envSchema = z.object({
 
   CIRCLE_API_KEY: z.string().min(1), // Circle Developer-Controlled Wallets
   CIRCLE_ENTITY_SECRET: z.string().min(1),
+  CIRCLE_WALLET_SET_ID: z.string(),
   CHAIN_ENV: z.enum(["testnet", "mainnet"]).default("testnet"), // controls which Circle blockchain to use
   ALLOWED_ORIGINS: z.string().min(1), // cors allow
   DATABASE_URL: z.string().url(),
+  REDIS_URL: optionalKey(),
+
+  // AI Router — at least one provider key is required, checked below (not per-field,
+  // since which providers are "required" depends on which models you enable).
+  ANTHROPIC_API_KEY: optionalKey(),
+  OPENAI_API_KEY: optionalKey(),
+  GOOGLE_GENERATIVE_AI_API_KEY: optionalKey(),
+  OPENROUTER_API_KEY: optionalKey(),
+  ADMIN_CIRCLE_WALLET_ID: z.string().min(1),
+  ADMIN_CIRCLE_WALLET_ADDRESS: z.string().startsWith("0x"),
+  USDC_CONTRACT_ADDRESS: z.string().startsWith("0x"),
+  SWEEP_THRESHOLD_USDC: z.string().default("0.20"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -33,19 +54,20 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-const missingOptionalEnv = ["PRIVY_APP_ID", "PRIVY_APP_SECRET", "DATABASE_URL"].filter(
-  (key) => !parsed.data[key as keyof typeof parsed.data],
-);
+// At least one AI provider key must be present, otherwise /api/chat can never work
+const hasAnyProviderKey = [
+  parsed.data.ANTHROPIC_API_KEY,
+  parsed.data.OPENAI_API_KEY,
+  parsed.data.GOOGLE_GENERATIVE_AI_API_KEY,
+  parsed.data.OPENROUTER_API_KEY,
+].some(Boolean);
 
-if (missingOptionalEnv.length > 0 && parsed.data.NODE_ENV !== "production") {
-  console.warn(
-    `[WARN] Missing optional env vars: ${missingOptionalEnv.join(", ")}. The app will start in development mode with empty values.`,
+if (!hasAnyProviderKey) {
+  console.error(
+    "[ERROR] No AI provider API key configured. Set at least one of: " +
+      "ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, OPENROUTER_API_KEY",
   );
+  process.exit(1);
 }
 
-export const env = {
-  ...parsed.data,
-  PRIVY_APP_ID: parsed.data.PRIVY_APP_ID ?? "",
-  PRIVY_APP_SECRET: parsed.data.PRIVY_APP_SECRET ?? "",
-  DATABASE_URL: parsed.data.DATABASE_URL ?? "",
-};
+export const env = parsed.data;

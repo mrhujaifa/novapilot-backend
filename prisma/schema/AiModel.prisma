@@ -1,14 +1,13 @@
 model AiModel {
-    id           String     @id @default(uuid())
-    aiProviderId String
-    aiProvider   AiProvider @relation(fields: [aiProviderId], references: [id])
-    modelName    String
-    displayName  String
-    isActive     Boolean    @default(true)
-    createdAt    DateTime   @default(now())
+  id             String         @id @default(uuid())
+  aiProviderId   String
+  modelName      String
+  displayName    String
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  aiProvider     AiProvider     @relation(fields: [aiProviderId], references: [id])
+  pricingHistory ModelPricing[]
 
-    pricingHistory ModelPricing[]
-
-    @@unique([aiProviderId, modelName])
-    @@index([isActive])
+  @@unique([aiProviderId, modelName])
+  @@index([isActive])
 }
