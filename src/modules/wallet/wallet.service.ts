@@ -10,7 +10,7 @@ import { prisma } from "../../lib/prisma";
 // This is the ONLY place that needs to change for testnet -> mainnet migration.
 // NOTE: confirm actual Arc network identifier with Circle docs before mainnet launch.
 
-const getCircleBlockchain = env.CHAIN_ENV === "mainnet" ? "ETH" : "ETH-SEPOLIA";
+// const getCircleBlockchain = env.CHAIN_ENV === "mainnet" ? "ETH" : "ETH-SEPOLIA";
 // The Wallet Set is created ONCE for the whole app (via a one-time setup script),
 // not per user. Its ID must be stored in env so every wallet creation call reuses it.
 function getWalletSetId(): string {

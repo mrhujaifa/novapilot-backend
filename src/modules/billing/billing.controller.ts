@@ -14,18 +14,11 @@ import {
   getBalanceQuerySchema,
   usageHistoryQuerySchema,
 } from "./billing.schema";
-import { mapCircleWebhookToDeposit, MappedDeposit } from "./circle-webhook.mapper";
+import { mapCircleWebhookToDeposit } from "./circle-webhook.mapper";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { successResponse } from "../../utils/apiResponse";
 import { AppError } from "../../utils/AppError";
 import { logger } from "../../lib/logger";
-
-// Type guard helper
-function isSkipped(
-  mapped: MappedDeposit | { skipped: true; reason: string },
-): mapped is { skipped: true; reason: string } {
-  return "skipped" in mapped;
-}
 
 // --- Existing handlers ---
 export const handleDeductUsage = asyncHandler(async (req: Request, res: Response) => {

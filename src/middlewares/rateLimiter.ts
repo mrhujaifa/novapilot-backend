@@ -22,21 +22,26 @@ export const authRateLimiter = rateLimit({
 
 // Scoped to authenticated user, not IP — one wallet shouldn't be able to
 // starve other users' quota, and a shared NAT/IP shouldn't rate-limit unrelated users.
-const ensureRedisConnected = async () => {
-  if (!redisClient) {
-    return;
-  }
+// const ensureRedisConnected = async () => {
+//   if (!redisClient) {
+//     return;
+//   }
 
-  if (!redisClient.isOpen) {
-    await redisClient.connect();
-  }
-};
+//   if (!redisClient.isOpen) {
+//     await redisClient.connect();
+//   }
+// };
 
-const redisStore = redisClient
+const client = redisClient;
+
+const redisStore = client
   ? new RedisStore({
       sendCommand: async (...args: string[]) => {
-        await ensureRedisConnected();
-        return redisClient.sendCommand(args);
+        if (!client.isOpen) {
+          await client.connect();
+        }
+
+        return client.sendCommand(args);
       },
       prefix: "rl:billing:deduct:",
     })
@@ -47,7 +52,7 @@ export const deductRateLimiter = rateLimit({
   max: 60, // max 60 deduct calls per user per minute
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip),
+  keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip ?? ""),
   store: redisStore,
   message: { success: false, status: 429, message: "Too many billing requests, slow down" },
 });
