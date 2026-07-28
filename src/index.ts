@@ -55,8 +55,8 @@ setInterval(
 
 // Routes
 app.use(AuthRoutes);
-app.use("/api/wallet", walletRoutes);
 app.use(billingRouter);
+app.use("/api/wallet", walletRoutes);
 app.use(modelsRouter);
 app.use("/api/chat", AiRouters);
 // Global Error Handler (must be last)
