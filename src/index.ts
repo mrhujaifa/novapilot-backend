@@ -11,6 +11,7 @@ import { globalErrorHandler } from "./errors/global-error-handler";
 import { logger } from "./lib/logger";
 import { reconcilePendingSettlements } from "./modules/jobs/sweep-reconciliation.job";
 import { AiRouters } from "./modules/agent/ai-router.route";
+import { walletRoutes } from "./modules/wallet/wallet.routes";
 
 export const app = express();
 
@@ -54,6 +55,7 @@ setInterval(
 
 // Routes
 app.use(AuthRoutes);
+app.use("/api/wallet", walletRoutes);
 app.use(billingRouter);
 app.use(modelsRouter);
 app.use("/api/chat", AiRouters);
