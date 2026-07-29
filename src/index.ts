@@ -53,6 +53,11 @@ setInterval(
   5 * 60 * 1000,
 );
 
+// Simple health check route — Fly.io uses this for deployment verification
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 // Routes
 app.use(AuthRoutes);
 app.use(billingRouter);

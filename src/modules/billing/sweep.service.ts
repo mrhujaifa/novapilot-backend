@@ -2,12 +2,12 @@
 
 import type { TokenBlockchain } from "@circle-fin/developer-controlled-wallets";
 import { v4 as uuidv4 } from "uuid";
-import { Decimal } from "../../generated/prisma/internal/prismaNamespace";
 import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
 import { circleClient } from "../../lib/circle";
 import { env } from "../../config/env.config";
-import type { NetworkEnv } from "../../generated/prisma/enums";
+import { NetworkEnv } from "../../generated/prisma";
+import { Decimal } from "../../generated/prisma/runtime/client";
 
 const BLOCKCHAIN_ID: Record<NetworkEnv, TokenBlockchain> = {
   TESTNET: "ARC-TESTNET",
@@ -78,10 +78,19 @@ export async function triggerSweep(input: TriggerSweepInput): Promise<void> {
     });
 
     logger.info(
-      { userId, network, settlementId: settlement.id, circleTransferId, amountUsdc },
+      {
+        userId,
+        network,
+        settlementId: settlement.id,
+        circleTransferId,
+        amountUsdc,
+      },
       "Sweep initiated",
     );
   } catch (err) {
-    logger.error({ userId, network, amountUsdc, err }, "Sweep initiation failed");
+    logger.error(
+      { userId, network, amountUsdc, err },
+      "Sweep initiation failed",
+    );
   }
 }

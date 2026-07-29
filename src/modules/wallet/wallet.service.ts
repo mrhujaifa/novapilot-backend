@@ -1,7 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../config/env.config";
-import { Prisma } from "../../generated/prisma/client";
-import { TransactionType } from "../../generated/prisma/enums";
+import { Prisma, TransactionType } from "../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import type { TransactionQuery } from "./wallet.dto";
@@ -78,14 +77,22 @@ function getWalletSetId(): string {
  * Idempotent: if a wallet already exists for this user (in our DB), returns
  * it instead of creating a duplicate Circle wallet.
  */
-export async function createCircleWallet(userId: string): Promise<CreatedWallet> {
+export async function createCircleWallet(
+  userId: string,
+): Promise<CreatedWallet> {
   const existing = await prisma.wallet.findUnique({
     where: {
-      userId_network: { userId, network: env.CHAIN_ENV === "mainnet" ? "MAINNET" : "TESTNET" },
+      userId_network: {
+        userId,
+        network: env.CHAIN_ENV === "mainnet" ? "MAINNET" : "TESTNET",
+      },
     },
   });
   if (existing) {
-    return { circleWalletId: existing.circleWalletId, walletAddress: existing.address };
+    return {
+      circleWalletId: existing.circleWalletId,
+      walletAddress: existing.address,
+    };
   }
 
   try {
@@ -112,7 +119,10 @@ export async function createCircleWallet(userId: string): Promise<CreatedWallet>
     };
   } catch (err) {
     logger.error({ err, userId }, "Circle wallet creation failed");
-    throw new AppError(StatusCodes.INTERNAL_SERVER_ERROR, "Failed to create wallet");
+    throw new AppError(
+      StatusCodes.INTERNAL_SERVER_ERROR,
+      "Failed to create wallet",
+    );
   }
 }
 

@@ -2,12 +2,15 @@ import { streamText } from "ai";
 import { StatusCodes } from "http-status-codes";
 import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
-import { deductUsage, InsufficientBalanceError } from "../billing/billing.service";
+import {
+  deductUsage,
+  InsufficientBalanceError,
+} from "../billing/billing.service";
 import { randomUUID } from "crypto";
 import { AppError } from "../../utils/AppError";
 import { triggerSweep } from "../billing/sweep.service";
-import { NetworkEnv } from "../../generated/prisma/enums";
 import { getProviderModel } from "./provider-registry";
+import { NetworkEnv } from "../../generated/prisma";
 
 interface SendMessageInput {
   conversationId: string;
@@ -32,10 +35,16 @@ async function resolveModel(modelPricingId: string) {
     throw new AppError(StatusCodes.NOT_FOUND, "Model pricing not found");
   }
   if (!pricing.aiModel.isActive) {
-    throw new AppError(StatusCodes.BAD_REQUEST, "This model is no longer available");
+    throw new AppError(
+      StatusCodes.BAD_REQUEST,
+      "This model is no longer available",
+    );
   }
   if (pricing.effectiveTo && pricing.effectiveTo < new Date()) {
-    throw new AppError(StatusCodes.BAD_REQUEST, "Pricing snapshot expired, refetch /api/models");
+    throw new AppError(
+      StatusCodes.BAD_REQUEST,
+      "Pricing snapshot expired, refetch /api/models",
+    );
   }
 
   return pricing;
@@ -45,7 +54,10 @@ async function resolveModel(modelPricingId: string) {
  * Verifies the conversation exists and belongs to the requesting user.
  * Prevents cross-user access via a guessed/leaked conversation ID.
  */
-async function assertConversationOwnership(conversationId: string, userId: string) {
+async function assertConversationOwnership(
+  conversationId: string,
+  userId: string,
+) {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
   });
@@ -63,7 +75,11 @@ async function assertConversationOwnership(conversationId: string, userId: strin
 /**
  * Creates a new conversation for a user.
  */
-export async function createConversation(userId: string, network: NetworkEnv, title?: string) {
+export async function createConversation(
+  userId: string,
+  network: NetworkEnv,
+  title?: string,
+) {
   return prisma.conversation.create({
     data: { userId, network, title: title?.trim() || "New Chat" },
   });
@@ -143,7 +159,10 @@ export async function fetchConversationMessages(
  * Deletes a conversation (and its messages, via cascade) after verifying
  * ownership.
  */
-export async function deleteConversation(conversationId: string, userId: string) {
+export async function deleteConversation(
+  conversationId: string,
+  userId: string,
+) {
   await assertConversationOwnership(conversationId, userId);
   await prisma.conversation.delete({ where: { id: conversationId } });
 }
@@ -151,7 +170,11 @@ export async function deleteConversation(conversationId: string, userId: string)
 /**
  * Renames a conversation after verifying ownership.
  */
-export async function renameConversation(conversationId: string, userId: string, title: string) {
+export async function renameConversation(
+  conversationId: string,
+  userId: string,
+  title: string,
+) {
   await assertConversationOwnership(conversationId, userId);
   return prisma.conversation.update({
     where: { id: conversationId },
@@ -197,7 +220,10 @@ export async function sendMessageAndStream(input: SendMessageInput) {
   await assertConversationOwnership(conversationId, userId);
 
   const pricing = await resolveModel(modelPricingId);
-  const model = getProviderModel(pricing.aiModel.aiProvider.name, pricing.aiModel.modelName);
+  const model = getProviderModel(
+    pricing.aiModel.aiProvider.name,
+    pricing.aiModel.modelName,
+  );
 
   // Save the user's message before calling the provider, so it's never
   // lost even if the AI call fails downstream.
@@ -233,7 +259,11 @@ export async function sendMessageAndStream(input: SendMessageInput) {
 
         // ── sweep trigger ─────────────────────────────────────────────────
         if (deductResult.sweepTriggered && deductResult.sweepAmount) {
-          void triggerSweep({ userId, network, amountUsdc: deductResult.sweepAmount });
+          void triggerSweep({
+            userId,
+            network,
+            amountUsdc: deductResult.sweepAmount,
+          });
         }
 
         await prisma.message.create({
@@ -258,7 +288,12 @@ export async function sendMessageAndStream(input: SendMessageInput) {
         }
 
         logger.info(
-          { userId, conversationId, modelPricingId, cost: deductResult.costUsdc },
+          {
+            userId,
+            conversationId,
+            modelPricingId,
+            cost: deductResult.costUsdc,
+          },
           "Message streamed, billed, and saved",
         );
       } catch (error) {
@@ -276,12 +311,19 @@ export async function sendMessageAndStream(input: SendMessageInput) {
   return result;
 }
 
-export async function assertHasBalance(userId: string, network: NetworkEnv): Promise<void> {
+export async function assertHasBalance(
+  userId: string,
+  network: NetworkEnv,
+): Promise<void> {
   const balance = await prisma.balance.findUnique({
     where: { userId_network: { userId, network } },
   });
 
   if (!balance || balance.amount.lessThanOrEqualTo(0)) {
-    throw new InsufficientBalanceError(userId, "> 0", balance?.amount.toString() ?? "0");
+    throw new InsufficientBalanceError(
+      userId,
+      "> 0",
+      balance?.amount.toString() ?? "0",
+    );
   }
 }

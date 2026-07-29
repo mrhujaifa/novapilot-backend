@@ -1,6 +1,6 @@
-import { NetworkEnv } from "../../generated/prisma/enums";
 import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
+import { NetworkEnv } from "../../generated/prisma";
 
 /**
  * Creates a zero-balance row for a user on a given network.
@@ -8,7 +8,10 @@ import { logger } from "../../lib/logger";
  * otherwise deductUsage/creditDeposit will fail with "Balance not found".
  * Idempotent — safe to call even if a balance row already exists.
  */
-export async function initializeBalance(userId: string, network: NetworkEnv): Promise<void> {
+export async function initializeBalance(
+  userId: string,
+  network: NetworkEnv,
+): Promise<void> {
   await prisma.balance.upsert({
     where: { userId_network: { userId, network } },
     update: {},

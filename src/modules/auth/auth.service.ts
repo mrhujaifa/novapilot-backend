@@ -4,12 +4,12 @@ import { logger } from "../../lib/logger";
 import { AppError } from "../../utils/AppError";
 import { StatusCodes } from "http-status-codes";
 import { createCircleWallet } from "../wallet/wallet.service";
-import { User } from "../../generated/prisma/client";
+import { NetworkEnv, User } from "../../generated/prisma/client";
 import { env } from "../../config/env.config";
-import type { NetworkEnv } from "../../generated/prisma/enums";
 import { initializeBalance } from "../billing/balance-init.service";
 
-const CURRENT_NETWORK: NetworkEnv = env.CHAIN_ENV === "mainnet" ? "MAINNET" : "TESTNET";
+const CURRENT_NETWORK: NetworkEnv =
+  env.CHAIN_ENV === "mainnet" ? "MAINNET" : "TESTNET";
 
 // step 1: verify Privy token, return the userId (Privy DID) inside it
 export async function verifyIdentity(token: string): Promise<string> {

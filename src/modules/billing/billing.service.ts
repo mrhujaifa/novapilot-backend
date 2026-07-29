@@ -1,10 +1,9 @@
-import { Prisma } from "../../generated/prisma/client";
-import { NetworkEnv } from "../../generated/prisma/enums";
+import { NetworkEnv, Prisma } from "../../generated/prisma/client";
 import { logger } from "../../lib/logger";
 import { prisma } from "../../lib/prisma";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../utils/AppError";
-import { Decimal } from "../../generated/prisma/internal/prismaNamespace";
+import { Decimal } from "../../generated/prisma/runtime/client";
 
 export class InsufficientBalanceError extends Error {
   constructor(userId: string, required: string, available: string) {
@@ -20,7 +19,9 @@ export class DuplicateDepositError extends Error {
   }
 }
 
-const SWEEP_THRESHOLD_USDC = new Decimal(process.env.SWEEP_THRESHOLD_USDC ?? "0.20");
+const SWEEP_THRESHOLD_USDC = new Decimal(
+  process.env.SWEEP_THRESHOLD_USDC ?? "0.20",
+);
 
 interface DeductUsageInput {
   userId: string;
@@ -50,8 +51,17 @@ type BalanceRow = {
  * AI request-এর token usage থেকে cost calculate করে balance থেকে deduct করে।
  * পুরোটা atomic transaction — balance check, deduct, log, ledger সব একসাথে বা কিছুই না।
  */
-export async function deductUsage(input: DeductUsageInput): Promise<DeductUsageResult> {
-  const { userId, network, modelPricingId, inputTokens, outputTokens, idempotencyKey } = input;
+export async function deductUsage(
+  input: DeductUsageInput,
+): Promise<DeductUsageResult> {
+  const {
+    userId,
+    network,
+    modelPricingId,
+    inputTokens,
+    outputTokens,
+    idempotencyKey,
+  } = input;
 
   return prisma.$transaction(async (tx) => {
     // ── idempotency check ─────────────────────────────────────────────────
@@ -88,7 +98,10 @@ export async function deductUsage(input: DeductUsageInput): Promise<DeductUsageR
     });
 
     if (!pricing.aiModel.isActive) {
-      throw new AppError(StatusCodes.BAD_REQUEST, "This model is no longer available");
+      throw new AppError(
+        StatusCodes.BAD_REQUEST,
+        "This model is no longer available",
+      );
     }
     if (pricing.effectiveTo && pricing.effectiveTo < new Date()) {
       throw new AppError(
@@ -102,7 +115,11 @@ export async function deductUsage(input: DeductUsageInput): Promise<DeductUsageR
     const totalCost = inputCost.add(outputCost);
 
     if (balance.amount.lessThan(totalCost)) {
-      throw new InsufficientBalanceError(userId, totalCost.toString(), balance.amount.toString());
+      throw new InsufficientBalanceError(
+        userId,
+        totalCost.toString(),
+        balance.amount.toString(),
+      );
     }
 
     // ── sweep threshold check (atomic) ────────────────────────────────────
@@ -121,7 +138,14 @@ export async function deductUsage(input: DeductUsageInput): Promise<DeductUsageR
 
     // ── usage log + ledger tx ─────────────────────────────────────────────
     const usageLog = await tx.usageLog.create({
-      data: { userId, network, modelPricingId, inputTokens, outputTokens, costUsdc: totalCost },
+      data: {
+        userId,
+        network,
+        modelPricingId,
+        inputTokens,
+        outputTokens,
+        costUsdc: totalCost,
+      },
     });
 
     await tx.transaction.create({
@@ -241,7 +265,9 @@ interface CreditDepositResult {
 // শুধুমাত্র creditDeposit অংশটা দিচ্ছি, বাকি service ঠিক আছে।
 // সম্পূর্ণ ফাইল তুমি আগের মতই রাখবে, শুধু creditDeposit ফাংশনটা বদলে নিচেরটা দেবে।
 
-export async function creditDeposit(input: CreditDepositInput): Promise<CreditDepositResult> {
+export async function creditDeposit(
+  input: CreditDepositInput,
+): Promise<CreditDepositResult> {
   const { userId, walletId, network, txHash, amount } = input;
   const depositAmount = new Prisma.Decimal(amount);
 
@@ -320,7 +346,10 @@ export async function creditDeposit(input: CreditDepositInput): Promise<CreditDe
 /**
  * Dashboard/balance-check-এর জন্য — শুধু read, lock লাগবে না।
  */
-export async function getBalance(userId: string, network: NetworkEnv): Promise<string> {
+export async function getBalance(
+  userId: string,
+  network: NetworkEnv,
+): Promise<string> {
   const balance = await prisma.balance.findUnique({
     where: { userId_network: { userId, network } },
   });
@@ -331,12 +360,18 @@ export async function getBalance(userId: string, network: NetworkEnv): Promise<s
  * Returns the user's Circle wallet address for a given network — this is
  * the address they should send USDC to for a deposit.
  */
-export async function getDepositAddress(userId: string, network: NetworkEnv): Promise<string> {
+export async function getDepositAddress(
+  userId: string,
+  network: NetworkEnv,
+): Promise<string> {
   const wallet = await prisma.wallet.findUnique({
     where: { userId_network: { userId, network } },
   });
   if (!wallet) {
-    throw new AppError(StatusCodes.NOT_FOUND, `No wallet found for user on ${network}`);
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      `No wallet found for user on ${network}`,
+    );
   }
   return wallet.address;
 }
@@ -370,7 +405,9 @@ interface UsageHistoryResult {
  * Paginated usage history for the dashboard.
  * Read-only — no locking needed, safe to run outside a transaction.
  */
-export async function getUsageHistory(input: GetUsageHistoryInput): Promise<UsageHistoryResult> {
+export async function getUsageHistory(
+  input: GetUsageHistoryInput,
+): Promise<UsageHistoryResult> {
   const { userId, network, page, limit } = input;
   const skip = (page - 1) * limit;
 

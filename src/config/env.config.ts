@@ -3,7 +3,10 @@ import path from "path";
 import dotenv from "dotenv";
 import { z } from "zod";
 
-const envFiles = [path.resolve(process.cwd(), ".env"), path.resolve(process.cwd(), "..", ".env")];
+const envFiles = [
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(process.cwd(), "..", ".env"),
+];
 
 for (const envFile of envFiles) {
   if (fs.existsSync(envFile)) {
@@ -21,7 +24,9 @@ const optionalKey = () =>
     .transform((v) => (v === "" ? undefined : v));
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
   PORT: z.coerce.number().default(4000),
 
   PRIVY_APP_ID: z.string().min(1), // identity/login only now
@@ -32,7 +37,7 @@ const envSchema = z.object({
   CIRCLE_WALLET_SET_ID: z.string(),
   CHAIN_ENV: z.enum(["testnet", "mainnet"]).default("testnet"), // controls which Circle blockchain to use
   ALLOWED_ORIGINS: z.string().min(1), // cors allow
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.string().min(1),
   REDIS_URL: optionalKey(),
 
   // AI Router — at least one provider key is required, checked below (not per-field,
@@ -50,7 +55,11 @@ const envSchema = z.object({
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  console.error("[ERROR]", "Environment validation failed:", parsed.error.flatten().fieldErrors);
+  console.error(
+    "[ERROR]",
+    "Environment validation failed:",
+    parsed.error.flatten().fieldErrors,
+  );
   process.exit(1);
 }
 
