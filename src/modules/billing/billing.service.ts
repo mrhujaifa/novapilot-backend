@@ -6,9 +6,13 @@ import { AppError } from "../../utils/AppError";
 import { Decimal } from "../../generated/prisma/runtime/client";
 import { GetUsageSummaryInput, UsageSummaryResult } from "./billing.type";
 
-export class InsufficientBalanceError extends Error {
+export class InsufficientBalanceError extends AppError {
   constructor(userId: string, required: string, available: string) {
-    super(`Insufficient balance: required ${required}, available ${available}`);
+    super(
+      StatusCodes.PAYMENT_REQUIRED,
+      `Insufficient balance: required ${required}, available ${available}`,
+    );
+
     this.name = "InsufficientBalanceError";
   }
 }

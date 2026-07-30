@@ -219,6 +219,13 @@ export async function sendMessageAndStream(input: SendMessageInput) {
 
   await assertConversationOwnership(conversationId, userId);
 
+  // Fail fast before any provider call or token spend: if the user has
+  // zero or negative balance, there's no point resolving the model or
+  // streaming a response we can never bill for. This throws
+  // InsufficientBalanceError (a 402 AppError) which propagates to the
+  // route handler and reaches the client BEFORE any streaming starts.
+  await assertHasBalance(userId, network);
+
   const pricing = await resolveModel(modelPricingId);
   const model = getProviderModel(
     pricing.aiModel.aiProvider.name,
