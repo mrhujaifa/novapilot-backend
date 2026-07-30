@@ -12,6 +12,7 @@ import { logger } from "./lib/logger";
 import { reconcilePendingSettlements } from "./modules/jobs/sweep-reconciliation.job";
 import { AiRouters } from "./modules/agent/ai-router.route";
 import { walletRoutes } from "./modules/wallet/wallet.routes";
+import { UsageRoutes } from "./modules/usage/usage.route";
 
 export const app = express();
 
@@ -61,6 +62,7 @@ app.get("/health", (_req, res) => {
 // Routes
 app.use(AuthRoutes);
 app.use(billingRouter);
+app.use(UsageRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use(modelsRouter);
 app.use("/api/chat", AiRouters);

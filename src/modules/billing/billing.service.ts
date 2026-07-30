@@ -4,6 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../utils/AppError";
 import { Decimal } from "../../generated/prisma/runtime/client";
+import { GetUsageSummaryInput, UsageSummaryResult } from "./billing.type";
 
 export class InsufficientBalanceError extends Error {
   constructor(userId: string, required: string, available: string) {
@@ -440,5 +441,28 @@ export async function getUsageHistory(
     limit,
     total,
     totalPages: Math.ceil(total / limit),
+  };
+}
+
+/**
+ * Aggregate usage summary for dashboard stat cards.
+ * Read-only, safe outside transaction.
+ */
+export async function getUsageSummary(
+  input: GetUsageSummaryInput,
+): Promise<UsageSummaryResult> {
+  const { userId, network } = input;
+
+  const result = await prisma.usageLog.aggregate({
+    where: { userId, network },
+    _count: { id: true },
+    _sum: { inputTokens: true, outputTokens: true, costUsdc: true },
+  });
+
+  return {
+    totalRequests: result._count.id,
+    totalInputTokens: result._sum.inputTokens ?? 0,
+    totalOutputTokens: result._sum.outputTokens ?? 0,
+    totalCostUsdc: (result._sum.costUsdc ?? 0).toString(),
   };
 }
