@@ -13,6 +13,8 @@ import { reconcilePendingSettlements } from "./modules/jobs/sweep-reconciliation
 import { AiRouters } from "./modules/agent/ai-router.route";
 import { walletRoutes } from "./modules/wallet/wallet.routes";
 import { UsageRoutes } from "./modules/usage/usage.route";
+import { ApiKeyRoutes } from "./modules/api/api-key.routes";
+import { PublicApiRoutes } from "./modules/public-api/public-api.routes";
 
 export const app = express();
 
@@ -66,5 +68,8 @@ app.use(UsageRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use(modelsRouter);
 app.use("/api/chat", AiRouters);
+app.use(ApiKeyRoutes);
+
+app.use(PublicApiRoutes);
 // Global Error Handler (must be last)
 app.use(globalErrorHandler);

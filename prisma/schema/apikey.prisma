@@ -1,0 +1,61 @@
+model ApiKey {
+    id     String @id @default(uuid())
+    userId String
+
+    // SHA-256 hash of the raw key. Never store the raw key itself — if the DB
+    // is ever compromised, hashed keys can't be reversed back into usable
+    // credentials (same principle as password hashing, but no salt needed
+    // here because the raw key is already high-entropy random data, not a
+    // human-chosen password).
+    keyHash String @unique
+
+    // First 8 chars of the raw key (e.g. "npk_a1b2"), stored in plaintext.
+    // Lets the UI show "which key is this" (e.g. in a list of active keys)
+    // without ever re-displaying the full secret after creation.
+    keyPrefix String
+
+    // Human-readable label the user assigns (e.g. "Discord Bot", "VS Code Extension").
+    name String
+
+    network NetworkEnv
+
+    // Single source of truth for active/inactive state. Deliberately NOT
+    // paired with a separate `isActive` boolean — two fields tracking the
+    // same concept can drift out of sync (e.g. isActive=true but revokedAt
+    // is also set). `revokedAt IS NULL` means active; any timestamp means
+    // revoked. One field, one meaning, no ambiguity.
+    revokedAt DateTime?
+
+    // Optional hard expiry — key stops working automatically after this
+    // date without requiring manual revocation. Useful for temporary/trial
+    // integrations.
+    expiresAt DateTime?
+
+    // Per-key spending cap in USDC. Null means "no cap, use full account
+    // balance" (default). Prevents a single leaked key from draining the
+    // entire account balance — the key itself becomes a limited-blast-radius
+    // credential rather than a full account password equivalent.
+    spendingLimitUsdc Decimal? @db.Decimal(18, 6)
+
+    // Running total spent through this specific key. Updated atomically
+    // alongside the existing balance-deduction transaction in deductUsage(),
+    // so a single DB write covers both the account-level balance AND the
+    // key-level spend cap check.
+    spentUsdc Decimal @default(0) @db.Decimal(18, 6)
+
+    // Optional per-key rate limit override (requests per minute). Enforced
+    // in Redis at request time; this column is just the configured value,
+    // not the live counter.
+    rateLimitPerMinute Int?
+
+    lastUsedAt DateTime?
+    createdAt  DateTime  @default(now())
+
+    user      User       @relation(fields: [userId], references: [id])
+    usageLogs UsageLog[]
+
+    // Prevents a user from accidentally creating two keys with the same
+    // label — small UX/data-hygiene guard, not a security boundary.
+    @@unique([userId, name])
+    @@index([userId])
+}

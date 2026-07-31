@@ -10,4 +10,5 @@ model User {
   wallets       Wallet[]
   settlements   Settlement[]
   conversations Conversation[]
+  apiKeys       ApiKey[]
 }

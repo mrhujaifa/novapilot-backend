@@ -13,7 +13,10 @@ model UsageLog {
   user         User         @relation(fields: [userId], references: [id])
   settlement   Settlement[]
   message      Message?
+  apiKeyId     String?
+  apiKey       ApiKey?      @relation(fields: [apiKeyId], references: [id])
 
+  @@index([apiKeyId])
   @@index([userId])
   @@index([createdAt])
 }

@@ -35,6 +35,7 @@ interface DeductUsageInput {
   inputTokens: number;
   outputTokens: number;
   idempotencyKey: string;
+  apiKeyId?: string;
 }
 
 export interface DeductUsageResult {
@@ -66,6 +67,7 @@ export async function deductUsage(
     inputTokens,
     outputTokens,
     idempotencyKey,
+    apiKeyId,
   } = input;
 
   return prisma.$transaction(async (tx) => {
@@ -150,8 +152,16 @@ export async function deductUsage(
         inputTokens,
         outputTokens,
         costUsdc: totalCost,
+        apiKeyId,
       },
     });
+
+    if (apiKeyId) {
+      await tx.apiKey.update({
+        where: { id: apiKeyId },
+        data: { spentUsdc: { increment: totalCost } },
+      });
+    }
 
     await tx.transaction.create({
       data: {
