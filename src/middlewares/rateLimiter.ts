@@ -3,14 +3,14 @@ import { StatusCodes } from "http-status-codes";
 import RedisStore from "rate-limit-redis";
 import { redisClient } from "../lib/redis";
 
-// limit request per IP, so no one can spam the auth endpoint
+// Limits requests per IP — prevents anyone from spamming the auth endpoint.
 export const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // time window: 15 minutes
-  max: 30, // max 30 requests allowed per IP in this window
-  standardHeaders: true, // send rate limit info in standard RateLimit-* headers
-  legacyHeaders: false, // disable old X-RateLimit-* headers
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
 
-  // custom handler so response shape matches our other error responses
+  // Custom handler so the response shape matches the rest of the API's error format.
   handler: (req, res) => {
     res.status(StatusCodes.TOO_MANY_REQUESTS).json({
       success: false,
@@ -20,32 +20,18 @@ export const authRateLimiter = rateLimit({
   },
 });
 
-// Scoped to authenticated user, not IP — one wallet shouldn't be able to
-// starve other users' quota, and a shared NAT/IP shouldn't rate-limit unrelated users.
-// const ensureRedisConnected = async () => {
-//   if (!redisClient) {
-//     return;
-//   }
-
-//   if (!redisClient.isOpen) {
-//     await redisClient.connect();
-//   }
-// };
-
-const client = redisClient;
-
-const redisStore = client
-  ? new RedisStore({
-      sendCommand: async (...args: string[]) => {
-        if (!client.isOpen) {
-          await client.connect();
-        }
-
-        return client.sendCommand(args);
-      },
-      prefix: "rl:billing:deduct:",
-    })
-  : undefined;
+// Scoped to the authenticated user, not IP — one wallet shouldn't be able
+// to starve other users' quota, and a shared NAT/IP shouldn't rate-limit
+// unrelated users.
+const redisStore = new RedisStore({
+  sendCommand: async (...args: string[]) => {
+    if (!redisClient!.isOpen) {
+      await redisClient!.connect();
+    }
+    return redisClient!.sendCommand(args);
+  },
+  prefix: "rl:billing:deduct:",
+});
 
 export const deductRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -54,5 +40,9 @@ export const deductRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip ?? ""),
   store: redisStore,
-  message: { success: false, status: 429, message: "Too many billing requests, slow down" },
+  message: {
+    success: false,
+    status: 429,
+    message: "Too many billing requests, slow down",
+  },
 });

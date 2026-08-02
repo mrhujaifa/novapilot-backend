@@ -2,7 +2,13 @@
 import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { logger } from "../lib/logger";
+import { env } from "../config/env.config";
 
+/**
+ * Verifies that an incoming Circle webhook request is authentic —
+ * confirms the signature matches Circle's public key for the given
+ * key ID, using the raw (unparsed) request body.
+ */
 export async function verifyCircleWebhook(
   req: Request,
   res: Response,
@@ -10,7 +16,9 @@ export async function verifyCircleWebhook(
 ): Promise<void> {
   try {
     const signature = req.headers["x-circle-signature"] as string | undefined;
-    const keyId = req.headers["x-circle-key-id"] as string | undefined; // ১. হেডার থেকে keyId সংগ্রহ করা হলো
+    const keyId = req.headers["x-circle-key-id"] as string | undefined;
+    // rawBody must be captured by an earlier middleware (e.g. express.raw()) —
+    // signature verification requires the exact bytes Circle signed, not the parsed JSON.
     const rawBody = (req as any).rawBody as Buffer | undefined;
 
     if (!signature || !keyId || !rawBody) {
@@ -19,7 +27,6 @@ export async function verifyCircleWebhook(
       return;
     }
 
-    // ২. এখানে keyId পাস করা হয়েছে
     const publicKey = await getCirclePublicKey(keyId);
 
     const verifier = crypto.createVerify("SHA256");
@@ -41,12 +48,19 @@ export async function verifyCircleWebhook(
   }
 }
 
+/**
+ * Fetches Circle's public key for a given key ID and converts it into a
+ * Node-native KeyObject usable by crypto.verify().
+ */
 async function getCirclePublicKey(keyId: string): Promise<crypto.KeyObject> {
-  const response = await fetch(`https://api.circle.com/v2/notifications/publicKey/${keyId}`, {
-    headers: {
-      Authorization: `Bearer ${process.env.CIRCLE_API_KEY}`,
+  const response = await fetch(
+    `https://api.circle.com/v2/notifications/publicKey/${keyId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${env.CIRCLE_API_KEY}`,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to fetch Circle public key: ${response.status}`);
@@ -55,7 +69,7 @@ async function getCirclePublicKey(keyId: string): Promise<crypto.KeyObject> {
   const data = await response.json();
   const publicKeyBase64 = data.data.publicKey;
 
-  // ৩. Circle-এর raw base64 কি-কে Node.js উপযোগী KeyObject-এ রূপান্তর করা হলো
+  // Circle returns a raw base64 SPKI key — convert to a Node KeyObject for crypto.verify()
   return crypto.createPublicKey({
     key: Buffer.from(publicKeyBase64, "base64"),
     format: "der",
