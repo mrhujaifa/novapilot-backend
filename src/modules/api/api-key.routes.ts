@@ -8,8 +8,14 @@ import {
 
 const router = Router();
 
-router.post("/api/api-keys", requireAuth, createApiKeyHandler);
-router.get("/api/api-keys", requireAuth, listApiKeysHandler);
-router.delete("/api/api-keys/:id", requireAuth, revokeApiKeyHandler);
+/**
+ * API key management.
+ * All routes require an authenticated user.
+ */
+router.use(requireAuth);
 
-export const ApiKeyRoutes = router;
+router.post("/", createApiKeyHandler);
+router.get("/", listApiKeysHandler);
+router.delete("/:id", revokeApiKeyHandler);
+
+export const apiKeyRouter = router;

@@ -1,12 +1,18 @@
 import { Router } from "express";
-import { requireAuth } from "./auth.middleware";
+
 import { getMe } from "./auth.controller";
+import { requireAuth } from "./auth.middleware";
 import { authRateLimiter } from "../../middlewares/rateLimiter";
 
 const router = Router();
 
-// GET /api/auth/me
-// flow: rate limit -> verify identity + ensure wallet (middleware) -> send response (controller)
-router.use("/api/auth/me", authRateLimiter, requireAuth, getMe);
+/**
+ * Returns the authenticated user's profile.
+ * Middleware chain:
+ * 1. Rate limiting
+ * 2. Authentication
+ * 3. Controller
+ */
+router.get("/me", authRateLimiter, requireAuth, getMe);
 
-export const AuthRoutes = router;
+export const authRouter = router;

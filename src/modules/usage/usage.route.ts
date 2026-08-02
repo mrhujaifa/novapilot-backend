@@ -1,11 +1,17 @@
 import { Router } from "express";
-import { requireAuth } from "../auth/auth.middleware";
+
 import { getUsageLogs, getUsageSummaryHandler } from "./usage.controller";
+import { requireAuth } from "../auth/auth.middleware";
 
 const router = Router();
 
-router.get("/api/usage/usage-history", requireAuth, getUsageLogs);
+/**
+ * Usage analytics endpoints.
+ * All routes require an authenticated user.
+ */
+router.use(requireAuth);
 
-router.get("/api/usage/usage-summary", requireAuth, getUsageSummaryHandler);
+router.get("/history", getUsageLogs);
+router.get("/summary", getUsageSummaryHandler);
 
-export const UsageRoutes = router;
+export const usageRouter = router;

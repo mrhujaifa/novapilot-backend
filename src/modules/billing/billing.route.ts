@@ -1,4 +1,5 @@
 import { Router } from "express";
+
 import {
   handleDeductUsage,
   handleGetBalance,
@@ -8,17 +9,21 @@ import {
 import { requireAuth } from "../auth/auth.middleware";
 import { verifyCircleWebhook } from "../../middlewares/circle-webhook";
 
-export const billingRouter = Router();
+const router = Router();
 
-billingRouter.post("/api/billing/deduct", requireAuth, handleDeductUsage);
-billingRouter.get("/api/billing/balance", requireAuth, handleGetBalance);
-billingRouter.post(
-  "/api/billing/webhook/deposit",
-  verifyCircleWebhook,
-  handleDepositWebhook,
-);
-billingRouter.get(
-  "/api/billing/deposit-address",
-  requireAuth,
-  handleGetDepositAddress,
-);
+/**
+ * Circle webhook endpoint.
+ * Protected by webhook signature verification.
+ */
+router.post("/webhook/deposit", verifyCircleWebhook, handleDepositWebhook);
+
+/**
+ * Protected billing endpoints.
+ */
+router.use(requireAuth);
+
+router.post("/deduct", handleDeductUsage);
+router.get("/balance", handleGetBalance);
+router.get("/deposit-address", handleGetDepositAddress);
+
+export const billingRouter = router;

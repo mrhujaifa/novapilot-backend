@@ -2,23 +2,15 @@
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
-
 import { env } from "./config/env.config";
-import { AuthRoutes } from "./modules/auth/auth.routes";
-import { billingRouter } from "./modules/billing/billing.route";
-import { modelsRouter } from "./modules/models/models.route";
 import { globalErrorHandler } from "./errors/global-error-handler";
 import { logger } from "./lib/logger";
 import { reconcilePendingSettlements } from "./modules/jobs/sweep-reconciliation.job";
-import { AiRouters } from "./modules/agent/ai-router.route";
-import { walletRoutes } from "./modules/wallet/wallet.routes";
-import { UsageRoutes } from "./modules/usage/usage.route";
-import { ApiKeyRoutes } from "./modules/api/api-key.routes";
-import { PublicApiRoutes } from "./modules/public-api/public-api.routes";
+import { indexRouter } from "./routers";
 
 export const app = express();
 
-// Security
+// Security middleware
 app.use(helmet());
 
 app.use(
@@ -28,17 +20,19 @@ app.use(
   }),
 );
 
-// Billing webhook (needs raw body)
+// Parse JSON and preserve the raw body for webhook verification.
 app.use(
   express.json({
     verify: (req, _res, buf) => {
-      (req as any).rawBody = buf; // সব route-এ rawBody থাকবে
+      (req as any).rawBody = buf;
     },
   }),
 );
 
 // JSON parser
 app.use(express.json());
+
+// API status endpoint
 app.get("/", (_req, res) => {
   res.status(200).json({
     success: true,
@@ -47,6 +41,12 @@ app.get("/", (_req, res) => {
   });
 });
 
+// Health check endpoint
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// Run background reconciliation every 5 minutes.
 setInterval(
   () => {
     reconcilePendingSettlements().catch((err) => {
@@ -56,20 +56,8 @@ setInterval(
   5 * 60 * 1000,
 );
 
-// Simple health check route — Fly.io uses this for deployment verification
-app.get("/health", (_req, res) => {
-  res.status(200).json({ status: "ok" });
-});
+// Application routes
+app.use("/api", indexRouter);
 
-// Routes
-app.use(AuthRoutes);
-app.use(billingRouter);
-app.use(UsageRoutes);
-app.use("/api/wallet", walletRoutes);
-app.use(modelsRouter);
-app.use("/api/chat", AiRouters);
-app.use(ApiKeyRoutes);
-
-app.use(PublicApiRoutes);
-// Global Error Handler (must be last)
+// Global error handler
 app.use(globalErrorHandler);

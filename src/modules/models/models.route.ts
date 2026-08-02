@@ -1,7 +1,13 @@
 import { Router } from "express";
+
 import { handleGetModels } from "./models.controller";
 
-export const modelsRouter = Router();
+const router = Router();
 
-// Public — no auth needed to browse available models before signing up
-modelsRouter.get("/api/models", handleGetModels);
+/**
+ * Public model catalog.
+ * Authentication is not required.
+ */
+router.get("/", handleGetModels);
+
+export const modelsRouter = router;
