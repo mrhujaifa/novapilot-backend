@@ -33,13 +33,21 @@ type WebhookResult =
   | { type: "sweep_update"; handled: true }
   | { type: "skipped"; reason: string };
 
-export async function mapCircleWebhookToDeposit(rawBody: unknown): Promise<WebhookResult> {
+export async function mapCircleWebhookToDeposit(
+  rawBody: unknown,
+): Promise<WebhookResult> {
   logger.info({ payload: rawBody }, "Circle webhook received");
 
   const parsed = circleWebhookPayloadSchema.safeParse(rawBody);
   if (!parsed.success) {
-    logger.error({ error: parsed.error }, "Circle webhook payload validation failed");
-    throw new AppError(StatusCodes.BAD_REQUEST, "Invalid Circle webhook payload shape");
+    logger.error(
+      { error: parsed.error },
+      "Circle webhook payload validation failed",
+    );
+    throw new AppError(
+      StatusCodes.BAD_REQUEST,
+      "Invalid Circle webhook payload shape",
+    );
   }
 
   const { notificationType, notification } = parsed.data;
@@ -50,10 +58,17 @@ export async function mapCircleWebhookToDeposit(rawBody: unknown): Promise<Webho
     notificationType === "transactions.outbound" ||
     notificationType === "transactions.transfer"
   ) {
-    const terminalStates = ["COMPLETE", "FAILED", "CANCELLED", "DENIED"] as const;
+    const terminalStates = [
+      "COMPLETE",
+      "FAILED",
+      "CANCELLED",
+      "DENIED",
+    ] as const;
     type TerminalState = (typeof terminalStates)[number];
 
-    const isTerminal = (terminalStates as readonly string[]).includes(notification.state);
+    const isTerminal = (terminalStates as readonly string[]).includes(
+      notification.state,
+    );
 
     if (isTerminal && notification.id && notification.txHash) {
       await handleTransactionComplete({
@@ -91,7 +106,10 @@ export async function mapCircleWebhookToDeposit(rawBody: unknown): Promise<Webho
 
   const amount = notification.amounts?.[0] ?? notification.amount;
   if (!amount) {
-    throw new AppError(StatusCodes.BAD_REQUEST, "Webhook payload missing amount");
+    throw new AppError(
+      StatusCodes.BAD_REQUEST,
+      "Webhook payload missing amount",
+    );
   }
 
   if (!notification.txHash) {

@@ -14,7 +14,7 @@ import {
   getBalanceQuerySchema,
   usageHistoryQuerySchema,
 } from "./billing.schema";
-import { mapCircleWebhookToDeposit } from "./circle-webhook.mapper";
+import { mapCircleWebhookToDeposit } from "../webhook/circle-webhook.mapper";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { successResponse } from "../../utils/apiResponse";
 import { AppError } from "../../utils/AppError";
