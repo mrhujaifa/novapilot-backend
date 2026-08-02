@@ -1,8 +1,8 @@
 POST http://localhost:4000/v1/chat
 Content-Type: application/json
-Authorization: Bearer npk_test_5165783c70d64cdf0a8e62f7e3827282ca7a63a1c4a738faf92f6758bc5e9e15
+Authorization: Bearer npk_test_51653c70d64cdf0a8e62f7e3827282ca7a63a1c4a738faf92f6758bc5e9e15
 
 {
   "model": "gemini-3.5-flash-lite",
-  "message": "give me how to use next js guide line short e "
+  "message": "tumar name ki"
 }
