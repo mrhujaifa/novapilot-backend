@@ -1,5 +1,6 @@
 import { redisClient } from "../../lib/redis";
-import { AppError } from "../../utils/AppError";
+import { AppError } from "../../errors/AppError";
+import { ErrorCodes } from "../../errors/error-codes";
 import { StatusCodes } from "http-status-codes";
 
 const DEFAULT_LIMIT_PER_MINUTE = 60; // fallback when the key has no custom override
@@ -22,18 +23,20 @@ export async function enforceApiKeyRateLimit(
   const limit = limitPerMinute ?? DEFAULT_LIMIT_PER_MINUTE;
   const redisKey = `ratelimit:apikey:${apiKeyId}`;
 
-  const count = await redisClient?.incr(redisKey);
+  const count = await redisClient.incr(redisKey);
 
   // Only set TTL on the first request in this window — subsequent INCRs
   // must not reset the expiry, or the window would never close.
   if (count === 1) {
-    await redisClient?.expire(redisKey, WINDOW_SECONDS);
+    await redisClient.expire(redisKey, WINDOW_SECONDS);
   }
 
-  if (count! > limit) {
+  if (count > limit) {
     throw new AppError(
       StatusCodes.TOO_MANY_REQUESTS,
-      `Rate limit exceeded: ${limit} requests per minute for this API key.`,
+      "Rate limit exceeded. Please try again later.",
+      ErrorCodes.API_KEY_RATE_LIMIT_EXCEEDED,
+      { details: { limit, windowSeconds: WINDOW_SECONDS } },
     );
   }
 }

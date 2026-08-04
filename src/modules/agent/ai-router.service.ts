@@ -7,10 +7,11 @@ import {
   InsufficientBalanceError,
 } from "../billing/billing.service";
 import { randomUUID } from "crypto";
-import { AppError } from "../../utils/AppError";
+import { AppError } from "../../errors/AppError";
 import { triggerSweep } from "../billing/sweep.service";
 import { getProviderModel } from "./provider-registry";
 import { NetworkEnv } from "../../generated/prisma";
+import { ErrorCodes } from "../../errors/error-codes";
 
 interface SendMessageInput {
   conversationId: string;
@@ -32,18 +33,24 @@ async function resolveModel(modelPricingId: string) {
   });
 
   if (!pricing) {
-    throw new AppError(StatusCodes.NOT_FOUND, "Model pricing not found");
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "Model pricing not found",
+      ErrorCodes.AI_MODEL_NOT_FOUND,
+    );
   }
   if (!pricing.aiModel.isActive) {
     throw new AppError(
       StatusCodes.BAD_REQUEST,
       "This model is no longer available",
+      ErrorCodes.AI_MODEL_NOT_AVAILABLE,
     );
   }
   if (pricing.effectiveTo && pricing.effectiveTo < new Date()) {
     throw new AppError(
       StatusCodes.BAD_REQUEST,
-      "Pricing snapshot expired, refetch /api/models",
+      "Pricing snapshot expired. Please refresh available models.",
+      ErrorCodes.AI_MODEL_PRICING_EXPIRED,
     );
   }
 
@@ -63,10 +70,18 @@ async function assertConversationOwnership(
   });
 
   if (!conversation) {
-    throw new AppError(StatusCodes.NOT_FOUND, "Conversation not found");
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "Conversation not found",
+      ErrorCodes.RESOURCE_NOT_FOUND,
+    );
   }
   if (conversation.userId !== userId) {
-    throw new AppError(StatusCodes.FORBIDDEN, "Access denied");
+    throw new AppError(
+      StatusCodes.FORBIDDEN,
+      "Access denied",
+      ErrorCodes.RESOURCE_ACCESS_DENIED,
+    );
   }
 
   return conversation;
@@ -120,10 +135,19 @@ export async function getConversation(conversationId: string, userId: string) {
   });
 
   if (!conversation) {
-    throw new AppError(StatusCodes.NOT_FOUND, "Conversation not found");
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "Conversation not found",
+      ErrorCodes.RESOURCE_NOT_FOUND,
+    );
   }
+
   if (conversation.userId !== userId) {
-    throw new AppError(StatusCodes.FORBIDDEN, "Access denied");
+    throw new AppError(
+      StatusCodes.FORBIDDEN,
+      "Access denied",
+      ErrorCodes.RESOURCE_ACCESS_DENIED,
+    );
   }
 
   return conversation;
@@ -175,10 +199,19 @@ export async function renameConversation(
   userId: string,
   title: string,
 ) {
+  const sanitizedTitle = title.trim();
+
+  if (!sanitizedTitle) {
+    throw new AppError(
+      StatusCodes.BAD_REQUEST,
+      "Title is required",
+      ErrorCodes.VALIDATION_ERROR,
+    );
+  }
   await assertConversationOwnership(conversationId, userId);
   return prisma.conversation.update({
     where: { id: conversationId },
-    data: { title: title.trim() },
+    data: { title: sanitizedTitle },
   });
 }
 

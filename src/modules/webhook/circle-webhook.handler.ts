@@ -1,7 +1,6 @@
-// src/modules/billing/circle-webhook.handler.ts
-
 import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
+import { SettlementStatus } from "../../generated/prisma";
 
 type TerminalState = "COMPLETE" | "FAILED" | "CANCELLED" | "DENIED";
 
@@ -27,7 +26,18 @@ export async function handleTransactionComplete(payload: {
     return;
   }
 
-  const newStatus = state === "COMPLETE" ? "SUCCESS" : "FAILED";
+  if (
+    settlement.status === SettlementStatus.SUCCESS ||
+    settlement.status === SettlementStatus.FAILED
+  ) {
+    logger.info(
+      { settlementId: settlement.id },
+      "Settlement already finalized",
+    );
+    return;
+  }
+  const newStatus =
+    state === "COMPLETE" ? SettlementStatus.SUCCESS : SettlementStatus.FAILED;
 
   await prisma.settlement.update({
     where: { id: settlement.id },
@@ -35,7 +45,13 @@ export async function handleTransactionComplete(payload: {
   });
 
   logger.info(
-    { settlementId: settlement.id, circleTransferId, txHash, newStatus },
+    {
+      settlementId: settlement.id,
+      circleTransferId,
+      txHash,
+      previousStatus: settlement.status,
+      newStatus,
+    },
     "Settlement finalized via webhook",
   );
 }

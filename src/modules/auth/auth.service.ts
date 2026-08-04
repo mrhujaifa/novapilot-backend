@@ -1,12 +1,13 @@
 import { privy } from "../../lib/privy";
 import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
-import { AppError } from "../../utils/AppError";
+import { AppError } from "../../errors/AppError";
 import { StatusCodes } from "http-status-codes";
 import { createCircleWallet } from "../wallet/wallet.service";
-import { NetworkEnv, User } from "../../generated/prisma/client";
+import { NetworkEnv, User, Wallet } from "../../generated/prisma/client";
 import { env } from "../../config/env.config";
 import { initializeBalance } from "../billing/balance-init.service";
+import { ErrorCodes } from "../../errors/error-codes";
 
 const CURRENT_NETWORK: NetworkEnv =
   env.CHAIN_ENV === "mainnet" ? "MAINNET" : "TESTNET";
@@ -18,7 +19,11 @@ export async function verifyIdentity(token: string): Promise<string> {
     return claims.userId;
   } catch (err) {
     logger.warn({ err }, "Privy token verification failed");
-    throw new AppError(StatusCodes.UNAUTHORIZED, "Invalid or expired token");
+    throw new AppError(
+      StatusCodes.UNAUTHORIZED,
+      "Invalid or expired token",
+      ErrorCodes.AUTH_INVALID_TOKEN,
+    );
   }
 }
 
@@ -47,7 +52,7 @@ export async function findOrCreateUser(privyUserId: string): Promise<User> {
  *   winning row instead. This trades a rare orphaned Circle wallet for never
  *   blocking the DB on external latency.
  */
-export async function ensureWallet(userId: string) {
+export async function ensureWallet(userId: string): Promise<Wallet> {
   const existing = await prisma.wallet.findUnique({
     where: { userId_network: { userId, network: CURRENT_NETWORK } },
   });
@@ -89,6 +94,15 @@ export async function ensureWallet(userId: string) {
       );
       return existingAfterRace;
     }
+
+    logger.error(
+      {
+        err,
+        userId,
+      },
+      "Failed to ensure wallet",
+    );
+
     throw err;
   }
 }

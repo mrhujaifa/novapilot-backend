@@ -1,17 +1,13 @@
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import { AppError } from "../../utils/AppError";
+import { AppError } from "../../errors/AppError";
+import { ErrorCodes } from "../../errors/error-codes";
 import { NetworkEnv } from "../../generated/prisma";
 import { createApiKeySchema } from "./api-key.schema";
 import { createApiKey, listApiKeys, revokeApiKey } from "./api-key.service";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { sendApiResponse } from "../../utils/sendApiResponse";
 
-/**
- * POST /api/api-keys
- * Creates a new API key for the authenticated user. The raw key is
- * returned exactly once in this response — the client must show it to
- * the user immediately and store nothing except what's rendered here.
- */
 export const createApiKeyHandler = asyncHandler(
   async (req: Request, res: Response) => {
     const userId = req.user!.id;
@@ -21,6 +17,7 @@ export const createApiKeyHandler = asyncHandler(
       throw new AppError(
         StatusCodes.BAD_REQUEST,
         parsed.error.issues[0].message,
+        ErrorCodes.VALIDATION_ERROR,
       );
     }
 
@@ -32,18 +29,15 @@ export const createApiKeyHandler = asyncHandler(
       expiresAt: parsed.data.expiresAt,
     });
 
-    res.status(StatusCodes.CREATED).json({
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.CREATED,
       success: true,
+      message: "API key created successfully",
       data: result,
     });
   },
 );
 
-/**
- * GET /api/api-keys?network=TESTNET
- * Lists all API keys for the authenticated user on the given network.
- * Never includes the raw key or hash — display-safe metadata only.
- */
 export const listApiKeysHandler = asyncHandler(
   async (req: Request, res: Response) => {
     const userId = req.user!.id;
@@ -56,23 +50,21 @@ export const listApiKeysHandler = asyncHandler(
       throw new AppError(
         StatusCodes.BAD_REQUEST,
         "Valid network query param is required",
+        ErrorCodes.INVALID_NETWORK,
       );
     }
 
     const apiKeys = await listApiKeys(userId, network as NetworkEnv);
 
-    res.status(StatusCodes.OK).json({
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.OK,
       success: true,
+      message: "API keys fetched successfully",
       data: apiKeys,
     });
   },
 );
 
-/**
- * DELETE /api/api-keys/:id
- * Revokes an API key. Soft-delete — the key immediately stops working
- * but the record is preserved for usage-history/audit purposes.
- */
 export const revokeApiKeyHandler = asyncHandler(
   async (req: Request, res: Response) => {
     const userId = req.user!.id;
@@ -80,9 +72,11 @@ export const revokeApiKeyHandler = asyncHandler(
 
     await revokeApiKey(apiKeyId, userId);
 
-    res.status(StatusCodes.OK).json({
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.OK,
       success: true,
       message: "API key revoked",
+      data: null,
     });
   },
 );

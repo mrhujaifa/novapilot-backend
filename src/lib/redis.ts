@@ -1,31 +1,27 @@
 import { createClient, type RedisClientType } from "redis";
+import { env } from "../config/env.config";
 import { logger } from "./logger";
 
-export const redisClient: RedisClientType | null = process.env.REDIS_URL
-  ? createClient({ url: process.env.REDIS_URL })
-  : null;
+// Required, not optional — rate limiting depends on Redis being available.
+// A silent null fallback here would let rate limiting quietly degrade to
+// in-memory (or fail entirely on multi-instance deployments), which is
+// worse than failing loudly at boot.
+export const redisClient: RedisClientType = createClient({
+  url: env.REDIS_URL,
+});
 
-if (redisClient) {
-  redisClient.on("error", (err) => {
-    logger.error({ err }, "Redis client error");
-  });
+redisClient.on("error", (err) => {
+  logger.error({ err }, "Redis client error");
+});
 
-  redisClient.on("connect", () => {
-    logger.info("Redis client connected");
-  });
-}
+redisClient.on("connect", () => {
+  logger.info("Redis client connected");
+});
 
-// Call once at server bootstrap (e.g. in your main index.ts before app.listen)
+// Call once at server bootstrap, before app.listen — fails fast if Redis
+// is unreachable rather than silently degrading rate-limiting/caching later.
 export async function connectRedis(): Promise<void> {
-  if (!redisClient) {
-    return;
-  }
-
   if (!redisClient.isOpen) {
-    try {
-      await redisClient.connect();
-    } catch (err) {
-      logger.error({ err }, "Redis connection failed; continuing without Redis");
-    }
+    await redisClient.connect();
   }
 }

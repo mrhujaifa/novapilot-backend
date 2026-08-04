@@ -1,8 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
+import { StatusCodes } from "http-status-codes";
 import { logger } from "../lib/logger";
 import { env } from "../config/env.config";
+import { sendApiResponse } from "../utils/sendApiResponse";
+import { ErrorCodes } from "../errors/error-codes";
 
 /**
  * Verifies that an incoming Circle webhook request is authentic —
@@ -23,7 +26,12 @@ export async function verifyCircleWebhook(
 
     if (!signature || !keyId || !rawBody) {
       logger.warn("Missing Circle webhook signature, key ID, or raw body");
-      res.status(401).json({ error: "Missing signature or key ID" });
+      sendApiResponse(res, {
+        httpStatusCode: StatusCodes.UNAUTHORIZED,
+        success: false,
+        message: "Missing signature or key ID",
+        code: ErrorCodes.WEBHOOK_SIGNATURE_MISSING,
+      });
       return;
     }
 
@@ -37,14 +45,24 @@ export async function verifyCircleWebhook(
 
     if (!isValid) {
       logger.warn("Invalid Circle webhook signature");
-      res.status(401).json({ error: "Invalid signature" });
+      sendApiResponse(res, {
+        httpStatusCode: StatusCodes.UNAUTHORIZED,
+        success: false,
+        message: "Invalid signature",
+        code: ErrorCodes.WEBHOOK_SIGNATURE_INVALID,
+      });
       return;
     }
 
     next();
   } catch (error) {
     logger.error({ err: error }, "Circle webhook verification failed");
-    res.status(500).json({ error: "Webhook verification error" });
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+      success: false,
+      message: "Webhook verification error",
+      code: ErrorCodes.WEBHOOK_PROCESSING_FAILED,
+    });
   }
 }
 

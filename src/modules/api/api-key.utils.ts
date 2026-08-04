@@ -1,5 +1,3 @@
-// src/modules/api-keys/api-key.utils.ts
-
 import { randomBytes, createHash } from "crypto";
 import { NetworkEnv } from "../../generated/prisma";
 

@@ -1,28 +1,28 @@
 model Settlement {
-    id               String           @id @default(uuid())
-    userId           String
-    network          NetworkEnv
-    fromWalletId     String
-    toWalletId       String
-    amountUsdc       Decimal          @db.Decimal(18, 6)
-    status           SettlementStatus @default(PENDING)
-    circleTransferId String?
-    txHash           String?
-    idempotencyKey   String           @unique
-    createdAt        DateTime         @default(now())
-    updatedAt        DateTime         @updatedAt
-    user             User             @relation(fields: [userId], references: [id])
-    usageLog         UsageLog?        @relation(fields: [usageLogId], references: [id])
-    usageLogId       String?
+  id               String           @id @default(uuid())
+  userId           String
+  network          NetworkEnv
+  fromWalletId     String
+  toWalletId       String
+  amountUsdc       Decimal          @db.Decimal(18, 6)
+  status           SettlementStatus @default(PENDING)
+  circleTransferId String?
+  txHash           String?
+  idempotencyKey   String           @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  user             User             @relation(fields: [userId], references: [id])
+  usageLog         UsageLog?        @relation(fields: [usageLogId], references: [id])
+  usageLogId       String?
 
-    @@index([userId])
-    @@index([status])
-    @@index([createdAt])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 enum SettlementStatus {
-    PENDING
-    PROCESSING
-    SUCCESS
-    FAILED
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
 }

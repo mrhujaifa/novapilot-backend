@@ -20,7 +20,7 @@ app.use(
   }),
 );
 
-// Parse JSON and preserve the raw body for webhook verification.
+// Parse JSON and preserve the raw body for webhook signature verification.
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -28,9 +28,6 @@ app.use(
     },
   }),
 );
-
-// JSON parser
-app.use(express.json());
 
 // API status endpoint
 app.get("/", (_req, res) => {
@@ -59,5 +56,5 @@ setInterval(
 // Application routes
 app.use("/api", indexRouter);
 
-// Global error handler
+// Global error handler — must be registered last.
 app.use(globalErrorHandler);

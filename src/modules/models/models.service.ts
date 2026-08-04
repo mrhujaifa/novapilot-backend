@@ -30,13 +30,18 @@ export async function getActiveModels(): Promise<ActiveModel[]> {
   });
 
   return modelsWithPricing
-    .filter((m) => m.pricingHistory.length > 0)
-    .map((m) => ({
-      modelPricingId: m.pricingHistory[0].id,
-      provider: m.aiProvider.name,
-      modelName: m.modelName,
-      displayName: m.displayName,
-      inputPricePerM: m.pricingHistory[0].inputPricePerM.toString(),
-      outputPricePerM: m.pricingHistory[0].outputPricePerM.toString(),
-    }));
+    .map((m) => {
+      const pricing = m.pricingHistory[0];
+      if (!pricing) return null;
+
+      return {
+        modelPricingId: pricing.id,
+        provider: m.aiProvider.name,
+        modelName: m.modelName,
+        displayName: m.displayName,
+        inputPricePerM: pricing.inputPricePerM.toString(),
+        outputPricePerM: pricing.outputPricePerM.toString(),
+      };
+    })
+    .filter((m): m is ActiveModel => m !== null);
 }

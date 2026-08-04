@@ -1,15 +1,16 @@
-// src/modules/public-api/public-chat.controller.ts
-
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { generateText } from "ai";
 import { randomUUID } from "crypto";
-import { AppError } from "../../utils/AppError";
+import { AppError } from "../../errors/AppError";
 import { prisma } from "../../lib/prisma";
 import { deductUsage } from "../billing/billing.service";
 import { publicChatSchema } from "./public-chat.schema";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { sendApiResponse } from "../../utils/sendApiResponse";
 import { getProviderModel } from "../agent/provider-registry";
+import { assertHasBalance } from "../agent/ai-router.service";
+import { ErrorCodes } from "../../errors/error-codes";
 
 /**
  * POST /v1/chat
@@ -33,10 +34,17 @@ export const publicChatHandler = asyncHandler(
       throw new AppError(
         StatusCodes.BAD_REQUEST,
         parsed.error.issues[0].message,
+        ErrorCodes.VALIDATION_ERROR,
       );
     }
 
     const { model: modelSlug, message } = parsed.data;
+
+    // Fail fast on zero/negative balance before spending anything on the
+    // provider call — same principle as the dashboard chat flow. Without
+    // this, a request from an empty-balance key would still generate (and
+    // pay for) a full AI response that can never be billed back to the user.
+    await assertHasBalance(userId, network);
 
     // Resolve the human-friendly model slug (e.g. "claude-3-5-sonnet") to an
     // active ModelPricing row. Public API clients reference models by slug,
@@ -54,6 +62,7 @@ export const publicChatHandler = asyncHandler(
       throw new AppError(
         StatusCodes.BAD_REQUEST,
         `Unknown or inactive model: ${modelSlug}`,
+        ErrorCodes.AI_MODEL_NOT_FOUND,
       );
     }
 
@@ -79,8 +88,10 @@ export const publicChatHandler = asyncHandler(
       apiKeyId,
     });
 
-    res.status(StatusCodes.OK).json({
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.OK,
       success: true,
+      message: "Chat completion generated successfully",
       data: {
         reply: result.text,
         model: modelSlug,

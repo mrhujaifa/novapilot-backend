@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
-
-import { asyncHandler } from "../../utils/asyncHandler";
-
 import { StatusCodes } from "http-status-codes";
+import { asyncHandler } from "../../utils/asyncHandler";
+import { sendApiResponse } from "../../utils/sendApiResponse";
 import {
   createConversationSchema,
   listConversationsQuerySchema,
@@ -11,7 +10,6 @@ import {
   sendMessageSchema,
 } from "./ai-router.schema";
 import {
-  assertHasBalance,
   createConversation,
   deleteConversation,
   fetchConversationMessages,
@@ -20,8 +18,6 @@ import {
   renameConversation,
   sendMessageAndStream,
 } from "./ai-router.service";
-import { InsufficientBalanceError } from "../billing/billing.service";
-import { AppError } from "../../utils/AppError";
 
 /**
  * POST /api/chat/conversations
@@ -38,7 +34,12 @@ export const createConversationHandler = asyncHandler(
       body.title,
     );
 
-    res.status(StatusCodes.CREATED).json(conversation);
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.CREATED,
+      success: true,
+      message: "Conversation created successfully",
+      data: conversation,
+    });
   },
 );
 
@@ -58,9 +59,17 @@ export const listConversationsHandler = asyncHandler(
       query.offset,
     );
 
-    res.json({
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.OK,
+      success: true,
+      message: "Conversations fetched successfully",
       data: conversations,
-      pagination: { total, limit: query.limit, offset: query.offset },
+      meta: {
+        page: Math.floor(query.offset / query.limit) + 1,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+      },
     });
   },
 );
@@ -72,10 +81,14 @@ export const listConversationsHandler = asyncHandler(
 export const getConversationHandler = asyncHandler(
   async (req: Request, res: Response) => {
     const userId = req.user!.id;
-
     const conversation = await getConversation(req.params.id as string, userId);
 
-    res.json(conversation);
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.OK,
+      success: true,
+      message: "Conversation fetched successfully",
+      data: conversation,
+    });
   },
 );
 
@@ -95,9 +108,17 @@ export const getMessagesHandler = asyncHandler(
       query.offset,
     );
 
-    res.json({
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.OK,
+      success: true,
+      message: "Messages fetched successfully",
       data: messages,
-      pagination: { total, limit: query.limit, offset: query.offset },
+      meta: {
+        page: Math.floor(query.offset / query.limit) + 1,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+      },
     });
   },
 );
@@ -105,34 +126,30 @@ export const getMessagesHandler = asyncHandler(
 /**
  * POST /api/chat/conversations/:id/messages
  * Sends a message in a conversation thread and streams the AI response.
+ *
+ * No sendApiResponse here by design — this is a raw text stream, not a
+ * JSON response. assertHasBalance() runs inside sendMessageAndStream()
+ * before any provider call, so InsufficientBalanceError (already an
+ * AppError with PAYMENT_REQUIRED + INSUFFICIENT_BALANCE) propagates
+ * straight to globalErrorHandler without needing a catch here.
  */
 export const sendMessageHandler = asyncHandler(
   async (req: Request, res: Response) => {
     const body = sendMessageSchema.parse(req.body);
     const userId = req.user!.id;
 
-    try {
-      const result = await sendMessageAndStream({
-        conversationId: req.params.id as string,
-        userId,
-        network: body.network,
-        modelPricingId: body.modelPricingId,
-        content: body.content,
-      });
+    const result = await sendMessageAndStream({
+      conversationId: req.params.id as string,
+      userId,
+      network: body.network,
+      modelPricingId: body.modelPricingId,
+      content: body.content,
+    });
 
-      result.pipeTextStreamToResponse(res);
-    } catch (error) {
-      if (error instanceof InsufficientBalanceError) {
-        throw new AppError(
-          StatusCodes.PAYMENT_REQUIRED,
-          "Your Router Wallet balance is empty. Please deposit USDC to continue.",
-        );
-      }
-
-      throw error;
-    }
+    result.pipeTextStreamToResponse(res);
   },
 );
+
 /**
  * PATCH /api/chat/conversations/:id
  * Renames a conversation (e.g. user editing the auto-generated title).
@@ -148,7 +165,12 @@ export const renameConversationHandler = asyncHandler(
       body.title,
     );
 
-    res.json(conversation);
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.OK,
+      success: true,
+      message: "Conversation renamed successfully",
+      data: conversation,
+    });
   },
 );
 
@@ -159,7 +181,6 @@ export const renameConversationHandler = asyncHandler(
 export const deleteConversationHandler = asyncHandler(
   async (req: Request, res: Response) => {
     const userId = req.user!.id;
-
     await deleteConversation(req.params.id as string, userId);
 
     res.status(StatusCodes.NO_CONTENT).send();

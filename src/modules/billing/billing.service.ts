@@ -2,15 +2,17 @@ import { NetworkEnv, Prisma } from "../../generated/prisma/client";
 import { logger } from "../../lib/logger";
 import { prisma } from "../../lib/prisma";
 import { StatusCodes } from "http-status-codes";
-import { AppError } from "../../utils/AppError";
+import { AppError } from "../../errors/AppError";
 import { Decimal } from "../../generated/prisma/runtime/client";
 import { GetUsageSummaryInput, UsageSummaryResult } from "./billing.type";
+import { ErrorCodes } from "../../errors/error-codes";
 
 export class InsufficientBalanceError extends AppError {
   constructor(userId: string, required: string, available: string) {
     super(
       StatusCodes.PAYMENT_REQUIRED,
       `Insufficient balance: required ${required}, available ${available}`,
+      ErrorCodes.INSUFFICIENT_BALANCE,
     );
 
     this.name = "InsufficientBalanceError";
@@ -94,7 +96,11 @@ export async function deductUsage(
     `;
 
     if (balanceRows.length === 0) {
-      throw new Error(`Balance not found for user ${userId} on ${network}`);
+      throw new AppError(
+        StatusCodes.NOT_FOUND,
+        "Balance not found",
+        ErrorCodes.BALANCE_NOT_FOUND,
+      );
     }
     const balance = balanceRows[0];
 
@@ -108,12 +114,14 @@ export async function deductUsage(
       throw new AppError(
         StatusCodes.BAD_REQUEST,
         "This model is no longer available",
+        ErrorCodes.AI_MODEL_NOT_AVAILABLE,
       );
     }
     if (pricing.effectiveTo && pricing.effectiveTo < new Date()) {
       throw new AppError(
         StatusCodes.BAD_REQUEST,
         "Pricing snapshot has expired, refetch current price",
+        ErrorCodes.PRICING_EXPIRED,
       );
     }
 
@@ -217,7 +225,7 @@ export async function creditDeposit(
   const depositAmount = new Prisma.Decimal(amount);
 
   return prisma.$transaction(async (tx) => {
-    // 1) Idempotency / duplicate delivery protection
+    // Idempotency / duplicate delivery protection
     const existingDeposit = await tx.deposit.findUnique({ where: { txHash } });
     if (existingDeposit) {
       return {
@@ -226,19 +234,19 @@ export async function creditDeposit(
       };
     }
 
-    // 2) Ensure balance row exists
+    // Ensure balance row exists
     await tx.balance.upsert({
       where: { userId_network: { userId, network } },
       update: {},
       create: {
         userId,
         network,
-        amount: 0,
-        pendingSweepAmount: 0,
+        amount: new Prisma.Decimal(0),
+        pendingSweepAmount: new Prisma.Decimal(0),
       },
     });
 
-    // 3) Lock the row and re-read it inside the transaction
+    // Lock the row and re-read it inside the transaction
     const lockedRows = await tx.$queryRaw<BalanceRow[]>`
       SELECT id, amount FROM "Balance"
       WHERE "userId" = ${userId} AND network = ${network}::"NetworkEnv"
@@ -246,19 +254,23 @@ export async function creditDeposit(
     `;
 
     if (lockedRows.length === 0) {
-      throw new Error(`Balance not found for user ${userId} on ${network}`);
+      throw new AppError(
+        StatusCodes.NOT_FOUND,
+        "Balance not found",
+        ErrorCodes.BALANCE_NOT_FOUND,
+      );
     }
 
     const balance = lockedRows[0];
     const newBalance = balance.amount.add(depositAmount);
 
-    // 4) Update balance
+    // Update balance
     await tx.balance.update({
       where: { id: balance.id },
       data: { amount: newBalance },
     });
 
-    // 5) Create deposit
+    // Create deposit
     const deposit = await tx.deposit.create({
       data: {
         userId,
@@ -270,7 +282,7 @@ export async function creditDeposit(
       },
     });
 
-    // 6) Create transaction ledger entry
+    // Create transaction ledger entry
     await tx.transaction.create({
       data: {
         userId,
@@ -288,8 +300,9 @@ export async function creditDeposit(
     };
   });
 }
+
 /**
- * Dashboard/balance-check-এর জন্য — শুধু read, lock লাগবে না।
+ * Dashboard/balance-check
  */
 export async function getBalance(
   userId: string,
@@ -315,7 +328,8 @@ export async function getDepositAddress(
   if (!wallet) {
     throw new AppError(
       StatusCodes.NOT_FOUND,
-      `No wallet found for user on ${network}`,
+      "Wallet not found",
+      ErrorCodes.WALLET_NOT_FOUND,
     );
   }
   return wallet.address;

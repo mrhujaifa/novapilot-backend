@@ -2,11 +2,12 @@ import { StatusCodes } from "http-status-codes";
 import { env } from "../../config/env.config";
 import { Prisma, TransactionType } from "../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
-import { AppError } from "../../utils/AppError";
+import { AppError } from "../../errors/AppError";
 import type { TransactionQuery } from "./wallet.dto";
 import { CreatedWallet } from "./wallet.type";
 import { circleClient } from "../../lib/circle";
 import { logger } from "../../lib/logger";
+import { ErrorCodes } from "../../errors/error-codes";
 
 interface BalanceSummary {
   available: string; // decimal string, USDC precision preserved
@@ -35,7 +36,11 @@ export async function getBalanceSummary(
   ]);
 
   if (!balance) {
-    throw new AppError(404, "Balance not initialized for this network.");
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "Balance not initialized for this network.",
+      ErrorCodes.BALANCE_NOT_FOUND,
+    );
   }
 
   return {
@@ -60,14 +65,14 @@ interface TransactionListResult {
   pagination: { total: number; limit: number; offset: number };
 }
 
-// const getCircleBlockchain = env.CHAIN_ENV === "mainnet" ? "ETH" : "ETH-SEPOLIA";
 // The Wallet Set is created ONCE for the whole app (via a one-time setup script),
 // not per user. Its ID must be stored in env so every wallet creation call reuses it.
 function getWalletSetId(): string {
   if (!env.CIRCLE_WALLET_SET_ID) {
     throw new AppError(
       StatusCodes.INTERNAL_SERVER_ERROR,
-      "CIRCLE_WALLET_SET_ID is not configured — run the wallet-set setup script first",
+      "CIRCLE_WALLET_SET_ID is not configured.",
+      ErrorCodes.CIRCLE_WALLET_SET_NOT_CONFIGURED,
     );
   }
   return env.CIRCLE_WALLET_SET_ID;
@@ -80,6 +85,8 @@ function getWalletSetId(): string {
 export async function createCircleWallet(
   userId: string,
 ): Promise<CreatedWallet> {
+  const BLOCKCHAIN = env.CHAIN_ENV === "mainnet" ? "ARC" : "ARC-TESTNET";
+
   const existing = await prisma.wallet.findUnique({
     where: {
       userId_network: {
@@ -98,7 +105,7 @@ export async function createCircleWallet(
   try {
     const response = await circleClient.createWallets({
       accountType: "SCA", // Smart Contract Account, supports gas sponsorship later
-      blockchains: ["ARC-TESTNET"],
+      blockchains: [BLOCKCHAIN],
       count: 1,
       walletSetId: getWalletSetId(),
       metadata: [{ refId: userId }], // links Circle wallet back to our internal user id
@@ -108,8 +115,9 @@ export async function createCircleWallet(
 
     if (!wallet) {
       throw new AppError(
-        StatusCodes.INTERNAL_SERVER_ERROR,
-        "Circle wallet creation returned no wallet",
+        StatusCodes.BAD_GATEWAY,
+        "Circle wallet creation returned no wallet.",
+        ErrorCodes.CIRCLE_WALLET_CREATION_FAILED,
       );
     }
 
@@ -120,8 +128,12 @@ export async function createCircleWallet(
   } catch (err) {
     logger.error({ err, userId }, "Circle wallet creation failed");
     throw new AppError(
-      StatusCodes.INTERNAL_SERVER_ERROR,
-      "Failed to create wallet",
+      StatusCodes.BAD_GATEWAY,
+      "Failed to create wallet.",
+      ErrorCodes.CIRCLE_WALLET_CREATION_FAILED,
+      {
+        cause: err,
+      },
     );
   }
 }

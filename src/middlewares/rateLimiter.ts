@@ -2,6 +2,8 @@ import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import { StatusCodes } from "http-status-codes";
 import RedisStore from "rate-limit-redis";
 import { redisClient } from "../lib/redis";
+import { sendApiResponse } from "../utils/sendApiResponse";
+import { ErrorCodes } from "../errors/error-codes";
 
 // Limits requests per IP — prevents anyone from spamming the auth endpoint.
 export const authRateLimiter = rateLimit({
@@ -12,10 +14,11 @@ export const authRateLimiter = rateLimit({
 
   // Custom handler so the response shape matches the rest of the API's error format.
   handler: (req, res) => {
-    res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.TOO_MANY_REQUESTS,
       success: false,
-      status: StatusCodes.TOO_MANY_REQUESTS,
       message: "Too many requests, please try again later",
+      code: ErrorCodes.RATE_LIMIT_EXCEEDED,
     });
   },
 });
@@ -25,10 +28,10 @@ export const authRateLimiter = rateLimit({
 // unrelated users.
 const redisStore = new RedisStore({
   sendCommand: async (...args: string[]) => {
-    if (!redisClient!.isOpen) {
-      await redisClient!.connect();
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
     }
-    return redisClient!.sendCommand(args);
+    return redisClient.sendCommand(args);
   },
   prefix: "rl:billing:deduct:",
 });
@@ -40,9 +43,12 @@ export const deductRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip ?? ""),
   store: redisStore,
-  message: {
-    success: false,
-    status: 429,
-    message: "Too many billing requests, slow down",
+  handler: (req, res) => {
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.TOO_MANY_REQUESTS,
+      success: false,
+      message: "Too many billing requests, slow down",
+      code: ErrorCodes.RATE_LIMIT_EXCEEDED,
+    });
   },
 });

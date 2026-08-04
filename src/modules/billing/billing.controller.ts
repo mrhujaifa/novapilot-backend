@@ -4,9 +4,7 @@ import {
   deductUsage,
   creditDeposit,
   getBalance,
-  getUsageHistory,
   getDepositAddress,
-  InsufficientBalanceError,
   DuplicateDepositError,
 } from "./billing.service";
 import {
@@ -16,33 +14,42 @@ import {
 } from "./billing.schema";
 import { mapCircleWebhookToDeposit } from "../webhook/circle-webhook.mapper";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { successResponse } from "../../utils/apiResponse";
-import { AppError } from "../../utils/AppError";
+import { sendApiResponse } from "../../utils/sendApiResponse";
 import { logger } from "../../lib/logger";
-import { NetworkEnv } from "../../generated/prisma";
+import { AppError } from "../../errors/AppError";
+import { ErrorCodes } from "../../errors/error-codes";
 
-// --- Existing handlers ---
 export const handleDeductUsage = asyncHandler(
   async (req: Request, res: Response) => {
     const body = deductUsageSchema.parse(req.body);
-    const userId = req.user!.id;
 
-    try {
-      const result = await deductUsage({
-        userId,
-        network: body.network,
-        modelPricingId: body.modelPricingId,
-        inputTokens: body.inputTokens,
-        outputTokens: body.outputTokens,
-        idempotencyKey: body.idempotencyKey,
-      });
-      return successResponse(res, result);
-    } catch (error) {
-      if (error instanceof InsufficientBalanceError) {
-        throw new AppError(StatusCodes.PAYMENT_REQUIRED, error.message);
-      }
-      throw error;
+    if (!req.user) {
+      throw new AppError(
+        StatusCodes.UNAUTHORIZED,
+        "Authentication required",
+        ErrorCodes.AUTH_UNAUTHORIZED,
+      );
     }
+
+    const userId = req.user.id;
+
+    // No try/catch needed — InsufficientBalanceError extends AppError, so
+    // globalErrorHandler picks it up directly with its own status + code intact.
+    const result = await deductUsage({
+      userId,
+      network: body.network,
+      modelPricingId: body.modelPricingId,
+      inputTokens: body.inputTokens,
+      outputTokens: body.outputTokens,
+      idempotencyKey: body.idempotencyKey,
+    });
+
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.OK,
+      success: true,
+      message: "Usage deducted successfully",
+      data: result,
+    });
   },
 );
 
@@ -52,7 +59,13 @@ export const handleGetBalance = asyncHandler(
     const userId = req.user!.id;
 
     const amount = await getBalance(userId, query.network);
-    return successResponse(res, { amount, network: query.network });
+
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.OK,
+      success: true,
+      message: "Balance retrieved successfully",
+      data: { amount, network: query.network },
+    });
   },
 );
 
@@ -62,10 +75,23 @@ export const handleGetDepositAddress = asyncHandler(
     const userId = req.user!.id;
 
     const address = await getDepositAddress(userId, query.network);
-    return successResponse(res, { address, network: query.network });
+
+    sendApiResponse(res, {
+      httpStatusCode: StatusCodes.OK,
+      success: true,
+      message: "Deposit address retrieved successfully",
+      data: { address, network: query.network },
+    });
   },
 );
 
+/**
+ * Circle webhook receiver. Always acknowledges with 200 — Circle retries
+ * on any non-2xx response, so a transient internal error here would
+ * otherwise trigger a retry storm. Failures are logged loudly instead;
+ * the response body still reports what actually happened for our own
+ * debugging/monitoring, it just never uses a failure HTTP status.
+ */
 export const handleDepositWebhook = asyncHandler(
   async (req: Request, res: Response) => {
     try {
@@ -73,19 +99,27 @@ export const handleDepositWebhook = asyncHandler(
 
       if (result.type === "skipped") {
         logger.info({ reason: result.reason }, "Circle webhook skipped");
-        return successResponse(res, {
-          status: "ignored",
-          reason: result.reason,
+        return sendApiResponse(res, {
+          httpStatusCode: StatusCodes.OK,
+          success: true,
+          message: "Webhook ignored",
+          data: { status: "ignored", reason: result.reason },
         });
       }
 
       if (result.type === "sweep_update") {
-        return successResponse(res, { status: "sweep_updated" });
+        return sendApiResponse(res, {
+          httpStatusCode: StatusCodes.OK,
+          success: true,
+          message: "Sweep status updated",
+          data: { status: "sweep_updated" },
+        });
       }
 
-      // result.type === "deposit"
       const { userId, walletId, network, txHash, amount } = result.data;
+
       logger.info({ userId, network, txHash, amount }, "Calling creditDeposit");
+
       const depositResult = await creditDeposit({
         userId,
         walletId,
@@ -93,18 +127,53 @@ export const handleDepositWebhook = asyncHandler(
         txHash,
         amount,
       });
-      logger.info({ txHash }, "creditDeposit done");
-      return successResponse(res, depositResult);
+
+      // logger deposit information
+      logger.info(
+        {
+          userId,
+          walletId,
+          network,
+          txHash,
+          amount,
+        },
+        "Deposit credited successfully",
+      );
+
+      return sendApiResponse(res, {
+        httpStatusCode: StatusCodes.OK,
+        success: true,
+        message: "Deposit processed successfully",
+        data: depositResult,
+      });
     } catch (error) {
       if (error instanceof DuplicateDepositError) {
         logger.warn({ err: error }, "Duplicate deposit webhook");
-        return successResponse(res, { status: "already_processed" });
+        return sendApiResponse(res, {
+          httpStatusCode: StatusCodes.OK,
+          success: true,
+          message: "Deposit already processed",
+          data: { status: "already_processed" },
+        });
       }
+
+      // Genuine failure — still ack Circle with 200 (see comment above), but
+      // report success: false in the body so our own logs/monitoring can
+      // tell this apart from an actually-successful webhook.
       logger.error(
-        { err: error },
-        "Webhook processing failed, but ack to Circle",
+        {
+          err: error,
+          eventId: req.body?.notification?.id,
+          notificationType: req.body?.notification?.notificationType,
+        },
+        "Webhook processing failed",
       );
-      return successResponse(res, { status: "error_logged_internally" });
+
+      return sendApiResponse(res, {
+        httpStatusCode: StatusCodes.OK,
+        success: false,
+        message: "Webhook processing failed, logged internally",
+      });
     }
   },
 );

@@ -1,5 +1,4 @@
-// src/jobs/sweep-reconciliation.job.ts
-
+import { SettlementStatus } from "../../generated/prisma";
 import { logger } from "../../lib/logger";
 import { prisma } from "../../lib/prisma";
 import { triggerSweep } from "../billing/sweep.service";
@@ -15,23 +14,29 @@ export async function reconcilePendingSettlements(): Promise<void> {
 
   const staleSettlements = await prisma.settlement.findMany({
     where: {
-      status: { in: ["PENDING", "FAILED"] },
+      status: { in: [SettlementStatus.PENDING, SettlementStatus.FAILED] },
       createdAt: { lt: staleThreshold },
+    },
+    orderBy: {
+      createdAt: "asc",
     },
     take: 50, // process in batches — avoid overwhelming Circle API
   });
 
   if (staleSettlements.length === 0) return;
 
-  logger.info({ count: staleSettlements.length }, "Reconciling stale settlements");
+  logger.info({
+    count: staleSettlements.length,
+    threshold: staleThreshold,
+  });
 
-  for (const s of staleSettlements) {
-    await triggerSweep({
-      userId: s.userId,
-      network: s.network,
-      amountUsdc: s.amountUsdc.toString(),
-    }).catch((err) => {
-      logger.error({ settlementId: s.id, err }, "Reconciliation retry failed");
-    });
-  }
+  await Promise.allSettled(
+    staleSettlements.map((s) =>
+      triggerSweep({
+        userId: s.userId,
+        network: s.network,
+        amountUsdc: s.amountUsdc.toString(),
+      }),
+    ),
+  );
 }

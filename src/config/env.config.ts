@@ -38,7 +38,7 @@ const envSchema = z.object({
   CHAIN_ENV: z.enum(["testnet", "mainnet"]).default("testnet"), // controls which Circle blockchain to use
   ALLOWED_ORIGINS: z.string().min(1), // cors allow
   DATABASE_URL: z.string().min(1),
-  REDIS_URL: optionalKey(),
+  REDIS_URL: z.string().min(1),
 
   // AI Router — at least one provider key is required, checked below (not per-field,
   // since which providers are "required" depends on which models you enable).

@@ -7,19 +7,12 @@ import { prisma } from "./lib/prisma";
 async function bootstrap() {
   await connectRedis();
 
-  app.listen(env.PORT, () => {
-    logger.info(`🚀 Server listening on port ${env.PORT}`);
-  });
-
-  // Add this to your src/server.ts after app.listen()
-  // This is what Meta/Google/Vercel do — active requests finish before process exits.
-
+  // Graceful shutdown — handle SIGTERM (sent by Render/Docker on deploy/scale-down)
+  // and SIGINT (Ctrl+C in local dev). Active requests finish before the process exits.
   const server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT }, "Server started");
   });
 
-  // Graceful shutdown — handle SIGTERM (sent by Fly.io/Docker on deploy/scale-down)
-  // and SIGINT (Ctrl+C in local dev).
   const shutdown = (signal: string) => {
     logger.info(
       { signal },
@@ -34,7 +27,7 @@ async function bootstrap() {
     });
 
     // Force exit if graceful shutdown takes too long (e.g. stuck streaming request).
-    // Fly.io waits 30s before SIGKILL — we exit before that.
+    // Most platforms send SIGKILL ~30s after SIGTERM — we exit before that.
     setTimeout(() => {
       logger.error("Graceful shutdown timeout — forcing exit");
       process.exit(1);
@@ -45,7 +38,7 @@ async function bootstrap() {
   process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-if (process.env.NODE_ENV !== "test") {
+if (env.NODE_ENV !== "test") {
   bootstrap().catch((error) => {
     logger.error({ err: error }, "Server bootstrap failed");
     process.exit(1);

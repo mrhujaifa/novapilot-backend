@@ -1,26 +1,21 @@
 import { Response, NextFunction, Request } from "express";
 import { StatusCodes } from "http-status-codes";
-import { AppError } from "../../utils/AppError";
-import { asyncHandler } from "../../utils/asyncHandler";
+import { AppError } from "../../errors/AppError";
 import { verifyIdentity, findOrCreateUser, ensureWallet } from "./auth.service";
+import { asyncHandler } from "../../utils/asyncHandler";
+import { ErrorCodes } from "../../errors/error-codes";
 
-export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    privyUserId: string;
-    circleWalletId: string;
-    walletAddress: string;
-    network: string;
-  };
-}
-
-// this middleware only orchestrates the flow, all real logic lives in auth.service.ts
-export const requireAuth = asyncHandler<AuthenticatedRequest>(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// This middleware only orchestrates the flow — real logic lives in auth.service.ts.
+export const requireAuth = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      throw new AppError(StatusCodes.UNAUTHORIZED, "Unauthorized access");
+      throw new AppError(
+        StatusCodes.UNAUTHORIZED,
+        "Authentication credentials were not provided.",
+        ErrorCodes.AUTH_UNAUTHORIZED,
+      );
     }
 
     const token = authHeader.slice(7).trim();
@@ -33,7 +28,7 @@ export const requireAuth = asyncHandler<AuthenticatedRequest>(
       id: user.id,
       privyUserId: user.privyUserId,
       circleWalletId: wallet.circleWalletId,
-      walletAddress: wallet.address, // Wallet model calls this field "address", not "walletAddress"
+      walletAddress: wallet.address, // Wallet model calls this field "address"
       network: wallet.network,
     };
 

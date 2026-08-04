@@ -6,8 +6,8 @@ declare global {
       user?: {
         id: string;
         privyUserId: string;
-        circleWalletId: string | null;
-        walletAddress: string | null;
+        circleWalletId: string;
+        walletAddress: string;
         network: string;
       };
     }

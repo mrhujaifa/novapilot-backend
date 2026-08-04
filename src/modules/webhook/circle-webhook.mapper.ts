@@ -1,11 +1,10 @@
-// src/modules/billing/circle-webhook.mapper.ts
-
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { StatusCodes } from "http-status-codes";
-import { AppError } from "../../utils/AppError";
+import { AppError } from "../../errors/AppError";
 import { logger } from "../../lib/logger";
 import { handleTransactionComplete } from "./circle-webhook.handler";
+import { ErrorCodes } from "../../errors/error-codes";
 
 const circleWebhookPayloadSchema = z.object({
   notificationType: z.string(),
@@ -47,6 +46,7 @@ export async function mapCircleWebhookToDeposit(
     throw new AppError(
       StatusCodes.BAD_REQUEST,
       "Invalid Circle webhook payload shape",
+      ErrorCodes.CIRCLE_INVALID_WEBHOOK,
     );
   }
 
@@ -109,6 +109,7 @@ export async function mapCircleWebhookToDeposit(
     throw new AppError(
       StatusCodes.BAD_REQUEST,
       "Webhook payload missing amount",
+      ErrorCodes.CIRCLE_INVALID_WEBHOOK,
     );
   }
 

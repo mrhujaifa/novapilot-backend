@@ -1,8 +1,9 @@
 import { StatusCodes } from "http-status-codes";
 import { NetworkEnv } from "../../generated/prisma";
 import { prisma } from "../../lib/prisma";
-import { AppError } from "../../utils/AppError";
+import { AppError } from "../../errors/AppError";
 import { generateApiKey } from "./api-key.utils";
+import { ErrorCodes } from "../../errors/error-codes";
 
 // Fields safe to return to the client. Deliberately excludes keyHash —
 // even though it's a one-way hash, there's no reason to ever serialize it
@@ -106,11 +107,21 @@ export async function revokeApiKey(
   });
 
   if (!apiKey) {
-    throw new AppError(StatusCodes.NOT_FOUND, "API key not found");
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "API key not found",
+      ErrorCodes.API_KEY_NOT_FOUND,
+    );
   }
+
   if (apiKey.userId !== userId) {
-    throw new AppError(StatusCodes.FORBIDDEN, "Access denied");
+    throw new AppError(
+      StatusCodes.FORBIDDEN,
+      "You do not have permission to revoke this API key.",
+      ErrorCodes.API_KEY_ACCESS_DENIED,
+    );
   }
+
   if (apiKey.revokedAt) {
     // Already revoked — idempotent no-op rather than an error, so a
     // double-click on "Revoke" in the UI doesn't surface a scary error.

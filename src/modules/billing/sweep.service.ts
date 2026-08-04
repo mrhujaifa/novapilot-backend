@@ -1,13 +1,14 @@
-// src/modules/billing/sweep.service.ts
-
 import type { TokenBlockchain } from "@circle-fin/developer-controlled-wallets";
 import { v4 as uuidv4 } from "uuid";
 import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
 import { circleClient } from "../../lib/circle";
 import { env } from "../../config/env.config";
-import { NetworkEnv } from "../../generated/prisma";
+import { NetworkEnv, SettlementStatus } from "../../generated/prisma";
 import { Decimal } from "../../generated/prisma/runtime/client";
+import { AppError } from "../../errors/AppError";
+import { StatusCodes } from "http-status-codes";
+import { ErrorCodes } from "../../errors/error-codes";
 
 const BLOCKCHAIN_ID: Record<NetworkEnv, TokenBlockchain> = {
   TESTNET: "ARC-TESTNET",
@@ -29,9 +30,22 @@ export async function triggerSweep(input: TriggerSweepInput): Promise<void> {
   const { userId, network, amountUsdc } = input;
 
   try {
-    const wallet = await prisma.wallet.findUniqueOrThrow({
-      where: { userId_network: { userId, network } },
+    const wallet = await prisma.wallet.findUnique({
+      where: {
+        userId_network: {
+          userId,
+          network,
+        },
+      },
     });
+
+    if (!wallet) {
+      throw new AppError(
+        StatusCodes.NOT_FOUND,
+        "Wallet not found",
+        ErrorCodes.WALLET_NOT_FOUND,
+      );
+    }
 
     const idempotencyKey = uuidv4();
 
@@ -42,14 +56,14 @@ export async function triggerSweep(input: TriggerSweepInput): Promise<void> {
         fromWalletId: wallet.circleWalletId,
         toWalletId: env.ADMIN_CIRCLE_WALLET_ID,
         amountUsdc: new Decimal(amountUsdc),
-        status: "PENDING",
+        status: SettlementStatus.PENDING,
         idempotencyKey,
       },
     });
 
     await prisma.settlement.update({
       where: { id: settlement.id },
-      data: { status: "PROCESSING" },
+      data: { status: SettlementStatus.PROCESSING },
     });
 
     const roundedAmount = new Decimal(amountUsdc).toDecimalPlaces(6).toString();
@@ -59,7 +73,7 @@ export async function triggerSweep(input: TriggerSweepInput): Promise<void> {
       walletAddress: wallet.address,
       tokenAddress: env.USDC_CONTRACT_ADDRESS,
       destinationAddress: env.ADMIN_CIRCLE_WALLET_ADDRESS,
-      amount: [roundedAmount], // ← amountUsdc এর বদলে
+      amount: [roundedAmount],
       fee: {
         type: "level",
         config: { feeLevel: "MEDIUM" },
@@ -69,7 +83,11 @@ export async function triggerSweep(input: TriggerSweepInput): Promise<void> {
     const circleTransferId = transferResponse.data?.id;
 
     if (!circleTransferId) {
-      throw new Error("Circle createTransaction returned no ID");
+      throw new AppError(
+        StatusCodes.BAD_GATEWAY,
+        "Circle transaction creation failed",
+        ErrorCodes.CIRCLE_TRANSACTION_FAILED,
+      );
     }
 
     await prisma.settlement.update({
