@@ -4,9 +4,10 @@ import { aiRouter } from "../modules/agent/ai-router.route";
 import { authRouter } from "../modules/auth/auth.routes";
 import { billingRouter } from "../modules/billing/billing.route";
 import { modelsRouter } from "../modules/models/models.route";
-import { publicApiRouter } from "../modules/public-api/public-api.routes";
 import { usageRouter } from "../modules/usage/usage.route";
 import { walletRouter } from "../modules/wallet/wallet.routes";
+import { publicApiRouter } from "../modules/public/public-api.routes";
+import { publicAiRouter } from "../modules/public/public-ai.router";
 
 const router = Router();
 
@@ -30,6 +31,9 @@ router.use("/api-keys", apiKeyRouter);
 
 // Public API (API key auth)
 router.use("/v1", publicApiRouter);
+
+// Public Ai (session auth)
+router.use("/ai", publicAiRouter);
 
 // Usage history & analytics
 router.use("/usage", usageRouter);

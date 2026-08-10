@@ -1,0 +1,16 @@
+model Webhook {
+    id          String    @id @default(cuid())
+    userId      String
+    url         String
+    secret      String // HMAC signing secret — stored plain, never exposed in API
+    events      String[] // WebhookEventType values
+    isActive    Boolean   @default(true)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+    lastFiredAt DateTime?
+    lastStatus  Int? // Last HTTP status from delivery attempt
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+}

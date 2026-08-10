@@ -11,4 +11,5 @@ model User {
   settlements   Settlement[]
   conversations Conversation[]
   apiKeys       ApiKey[]
+  webhook       Webhook[]
 }
