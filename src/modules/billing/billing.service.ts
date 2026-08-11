@@ -230,11 +230,10 @@ export async function creditDeposit(
     if (existingDeposit) {
       return {
         depositId: existingDeposit.id,
-        balanceAfter: existingDeposit.amount.toString(), // or fetch from transaction/deposit table if needed
+        balanceAfter: existingDeposit.amount.toString(),
       };
     }
 
-    // Ensure balance row exists
     await tx.balance.upsert({
       where: { userId_network: { userId, network } },
       update: {},
@@ -246,7 +245,6 @@ export async function creditDeposit(
       },
     });
 
-    // Lock the row and re-read it inside the transaction
     const lockedRows = await tx.$queryRaw<BalanceRow[]>`
       SELECT id, amount FROM "Balance"
       WHERE "userId" = ${userId} AND network = ${network}::"NetworkEnv"
@@ -264,13 +262,11 @@ export async function creditDeposit(
     const balance = lockedRows[0];
     const newBalance = balance.amount.add(depositAmount);
 
-    // Update balance
     await tx.balance.update({
       where: { id: balance.id },
       data: { amount: newBalance },
     });
 
-    // Create deposit
     const deposit = await tx.deposit.create({
       data: {
         userId,
@@ -282,7 +278,6 @@ export async function creditDeposit(
       },
     });
 
-    // Create transaction ledger entry
     await tx.transaction.create({
       data: {
         userId,

@@ -7,9 +7,19 @@ model Deposit {
   status      TransactionStatus @default(PENDING)
   confirmedAt DateTime?
   createdAt   DateTime          @default(now())
-  user        User              @relation(fields: [userId], references: [id])
-  wallet      Wallet            @relation(fields: [walletId], references: [id])
+
+  // CCTP-এর জন্য — webhook থেকে automatically set হবে
+  depositMethod DepositMethod @default(DIRECT)
+  sourceChain   String?
+
+  user        User         @relation(fields: [userId], references: [id])
+  wallet      Wallet       @relation(fields: [walletId], references: [id])
   transaction Transaction?
 
   @@index([userId])
+}
+
+enum DepositMethod {
+  DIRECT
+  CCTP
 }
