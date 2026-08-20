@@ -1,0 +1,22 @@
+// Price versioning — creator price change করলে পুরনো usage records
+// পুরনো price ধরে রাখে। Historical accuracy critical।
+model ApiPriceVersion {
+  id    String @id @default(uuid())
+  apiId String
+
+  // Per 1k calls pricing model এর জন্য।
+  costPer1kCalls Decimal @db.Decimal(18, 8)
+
+  effectiveFrom  DateTime  @default(now())
+  // Null মানে এইটাই current active price।
+  effectiveUntil DateTime?
+  isCurrent      Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+
+  api          ApiListing               @relation(fields: [apiId], references: [id])
+  usageRecords MarketplaceUsageRecord[]
+
+  @@index([apiId, isCurrent])
+  @@index([apiId, effectiveFrom])
+}

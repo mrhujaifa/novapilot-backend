@@ -1,0 +1,28 @@
+model CreatorProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  // Marketplace এ দেখাবে
+  displayName String?
+  bio         String? @db.Text
+  website     String?
+
+  // Admin manually approve দিলে badge পাবে
+  isVerified Boolean   @default(false)
+  verifiedAt DateTime?
+
+  // Creator earnings — USDC, withdraw করা যাবে
+  availableBalanceUsdc Decimal @default(0) @db.Decimal(18, 6)
+  pendingBalanceUsdc   Decimal @default(0) @db.Decimal(18, 6)
+  frozenBalanceUsdc    Decimal @default(0) @db.Decimal(18, 6)
+
+  totalCallsServed Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user                      User                       @relation(fields: [userId], references: [id])
+  apis                      ApiListing[]
+  withdrawals               CreatorWithdrawal[]
+  creatorEarningSettlements CreatorEarningSettlement[]
+}

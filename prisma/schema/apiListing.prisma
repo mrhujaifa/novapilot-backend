@@ -1,0 +1,45 @@
+model ApiListing {
+  id          String @id @default(uuid())
+  creatorId   String
+  apiName     String
+  // Slug globally unique — proxy URL এ use হয়।
+  // একবার set করলে change করা যাবে না (consumers এর integration break হবে)।
+  apiSlug     String @unique
+  description String @db.Text
+  category    String
+
+  // Creator এর original server — SSRF validation করে store হবে।
+  // HTTPS enforce, private IP block, DNS rebinding protection।
+  targetOriginUrl String
+
+  // NovaPilot এর generated proxy URL — read-only, system set করে।
+  proxyEndpointUrl String
+
+  pricingModel ApiPricingModel  @default(PER_1K_CALLS)
+  status       ApiListingStatus @default(DRAFT)
+
+  // Report count বাড়লে risk engine trigger হয়।
+  reportCount     Int     @default(0)
+  successfulCalls Int     @default(0)
+  uptimePercent   Decimal @default(100) @db.Decimal(5, 2)
+  avgLatencyMs    Int     @default(0)
+
+  network   NetworkEnv
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  creator       CreatorProfile           @relation(fields: [creatorId], references: [id])
+  priceVersions ApiPriceVersion[]
+  credential    ApiCredential?
+  consumerKeys  MarketplaceConsumerKey[]
+  subscriptions ApiSubscription[]
+  usageRecords  MarketplaceUsageRecord[]
+  reports       ApiReport[]
+  healthCheck   ApiHealthCheck?
+  ledgerEntries MarketplaceLedgerEntry[]
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([category])
+  @@index([apiSlug])
+}

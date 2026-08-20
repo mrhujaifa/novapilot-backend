@@ -1,0 +1,27 @@
+// Consumer এর API complaint — automatic refund হবে না।
+// Risk score দিয়ে evidence-based decision।
+model ApiReport {
+  id             String @id @default(uuid())
+  apiId          String
+  reporterUserId String
+
+  reason   String
+  evidence String? @db.Text // Screenshot URL বা description
+
+  status    ReportStatus @default(OPEN)
+  // 0-100, বাড়লে action নেওয়া হয়।
+  riskScore Int          @default(0)
+
+  resolvedAt DateTime?
+  resolution String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  api      ApiListing @relation(fields: [apiId], references: [id])
+  reporter User       @relation("ReporterUser", fields: [reporterUserId], references: [id])
+
+  @@index([apiId])
+  @@index([status])
+  @@index([reporterUserId])
+}

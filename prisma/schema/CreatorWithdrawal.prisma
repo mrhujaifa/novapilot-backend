@@ -1,0 +1,39 @@
+// Creator এর USDC withdrawal request।
+// Consumer এর জন্য এই model নেই — তারা withdraw করতে পারবে না।
+model CreatorWithdrawal {
+    id        String @id @default(uuid())
+    creatorId String
+
+    amountUsdc Decimal @db.Decimal(18, 6)
+
+    status WithdrawalStatus @default(PENDING)
+
+    // Duplicate withdrawal ঠেকাতে।
+    idempotencyKey String @unique
+
+    // Circle থেকে আসা transfer ID — reconciliation এর জন্য।
+    circleTransferId String?
+    txHash           String?
+
+    // Destination — creator এর external wallet address।
+    destinationAddress String
+
+    attempts  Int     @default(0)
+    lastError String?
+
+    createdAt   DateTime  @default(now())
+    completedAt DateTime?
+    updatedAt   DateTime  @updatedAt
+
+    creator CreatorProfile @relation(fields: [creatorId], references: [id])
+
+    @@index([creatorId])
+    @@index([status])
+}
+
+enum WithdrawalStatus {
+    PENDING
+    PROCESSING
+    COMPLETED
+    FAILED
+}

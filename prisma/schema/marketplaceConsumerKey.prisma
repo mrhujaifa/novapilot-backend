@@ -1,0 +1,32 @@
+// Marketplace consumer এর API key — existing ApiKey থেকে আলাদা।
+// Existing ApiKey হলো AI gateway এর জন্য।
+// এইটা specific marketplace API তে scoped।
+model MarketplaceConsumerKey {
+  id     String @id @default(uuid())
+  userId String
+  apiId  String
+
+  // SHA-256 hash — plaintext কখনো store হবে না।
+  keyHash   String @unique
+  // UI তে identification এর জন্য (যেমন nvpt_live_a1b2...)
+  keyPrefix String
+
+  status             MarketplaceKeyStatus @default(ACTIVE)
+  rateLimitPerMinute Int?
+
+  // Optional spending cap — null মানে account balance limit।
+  spendingLimitUsdc Decimal? @db.Decimal(18, 6)
+  spentUsdc         Decimal  @default(0) @db.Decimal(18, 6)
+
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user         User                     @relation(fields: [userId], references: [id])
+  api          ApiListing               @relation(fields: [apiId], references: [id])
+  usageRecords MarketplaceUsageRecord[]
+
+  @@index([userId])
+  @@index([apiId])
+}

@@ -1,8 +1,9 @@
 model User {
-  id            String         @id @default(uuid())
-  privyUserId   String         @unique
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id          String   @id @default(uuid())
+  privyUserId String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   balances      Balance[]
   deposits      Deposit[]
   transactions  Transaction[]
@@ -12,4 +13,10 @@ model User {
   conversations Conversation[]
   apiKeys       ApiKey[]
   webhook       Webhook[]
+
+  // Marketplace relations
+  creatorProfile   CreatorProfile?
+  marketplaceKeys  MarketplaceConsumerKey[]
+  apiSubscriptions ApiSubscription[]
+  reportsFiled     ApiReport[]              @relation("ReporterUser")
 }

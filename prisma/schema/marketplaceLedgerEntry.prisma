@@ -1,0 +1,37 @@
+// Marketplace এর double-entry immutable financial ledger।
+// Balance কখনো directly update করা যাবে না —
+// শুধু ledger entry লিখে সেখান থেকে derive করতে হবে।
+model MarketplaceLedgerEntry {
+  id             String @id @default(uuid())
+  // Same action দুইবার process হলে duplicate entry হবে না।
+  idempotencyKey String @unique
+
+  accountType LedgerAccountType
+  direction   LedgerDirection
+
+  amountUsdc Decimal @db.Decimal(18, 8)
+
+  // কোন usage record, report, বা settlement এর জন্য এই entry।
+  referenceId   String
+  referenceType String // "USAGE", "REFUND", "SETTLEMENT", "DEPOSIT"
+
+  // System নিজে করলে "system", user করলে user ID।
+  actor String
+
+  previousBalance  Decimal @db.Decimal(18, 6)
+  resultingBalance Decimal @db.Decimal(18, 6)
+  reason           String
+
+  // Ledger entry কোন API এর সাথে related।
+  apiId String?
+
+  createdAt DateTime @default(now())
+
+  api                      ApiListing?             @relation(fields: [apiId], references: [id])
+  marketplaceUsageRecord   MarketplaceUsageRecord? @relation(fields: [marketplaceUsageRecordId], references: [id])
+  marketplaceUsageRecordId String?
+
+  @@index([referenceId])
+  @@index([accountType])
+  @@index([createdAt])
+}

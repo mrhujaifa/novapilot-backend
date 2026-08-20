@@ -1,0 +1,18 @@
+// Circuit breaker state — upstream failure track করে।
+// CLOSED = normal, OPEN = blocked, HALF_OPEN = recovery testing।
+model ApiHealthCheck {
+  id    String @id @default(uuid())
+  apiId String @unique
+
+  state               CircuitBreakerState @default(CLOSED)
+  // ৫ consecutive failure → OPEN state।
+  consecutiveFailures Int                 @default(0)
+
+  lastCheckedAt DateTime  @default(now())
+  // OPEN state এ কখন আবার test করা হবে।
+  nextRetryAt   DateTime?
+
+  updatedAt DateTime @updatedAt
+
+  api ApiListing @relation(fields: [apiId], references: [id])
+}

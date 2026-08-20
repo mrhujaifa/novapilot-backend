@@ -1,0 +1,22 @@
+// Consumer কোন API এ subscribe করেছে তার record।
+model ApiSubscription {
+  id             String @id @default(uuid())
+  userId         String
+  apiId          String
+  priceVersionId String
+
+  status      String    @default("ACTIVE") // ACTIVE, PAUSED, CANCELLED
+  startedAt   DateTime  @default(now())
+  cancelledAt DateTime?
+  pausedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User       @relation(fields: [userId], references: [id])
+  api  ApiListing @relation(fields: [apiId], references: [id])
+
+  @@unique([userId, apiId])
+  @@index([userId])
+  @@index([apiId])
+}

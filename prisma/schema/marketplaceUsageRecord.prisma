@@ -1,0 +1,39 @@
+// প্রতিটা marketplace API call এর immutable record।
+// Billing এর source of truth।
+model MarketplaceUsageRecord {
+  id             String @id @default(uuid())
+  // Duplicate request ঠেকাতে — same key দিয়ে দুইবার charge হবে না।
+  idempotencyKey String @unique
+
+  consumerKeyId  String
+  apiId          String
+  priceVersionId String
+
+  status MarketplaceUsageStatus @default(RECEIVED)
+
+  // Request forward করার আগে reserve করা amount।
+  reservedAmountUsdc Decimal @db.Decimal(18, 8)
+  // Actual response আসার পর final charge — reservation এর চেয়ে কম হতে পারে।
+  finalChargeUsdc    Decimal @default(0) @db.Decimal(18, 8)
+
+  latencyMs          Int?
+  upstreamStatusCode Int?
+
+  // Unique request ID — logging ও debugging এর জন্য।
+  requestId String     @unique @default(uuid())
+  network   NetworkEnv
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consumerKey   MarketplaceConsumerKey   @relation(fields: [consumerKeyId], references: [id])
+  api           ApiListing               @relation(fields: [apiId], references: [id])
+  priceVersion  ApiPriceVersion          @relation(fields: [priceVersionId], references: [id])
+  ledgerEntries MarketplaceLedgerEntry[]
+  transaction   Transaction?
+
+  @@index([consumerKeyId])
+  @@index([apiId])
+  @@index([createdAt])
+  @@index([status])
+}

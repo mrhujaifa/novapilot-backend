@@ -7,4 +7,73 @@ enum TransactionStatus {
 enum TransactionType {
   CREDIT
   DEBIT
+  MARKETPLACE_CHARGE
+  MARKETPLACE_REFUND
+}
+
+enum ApiListingStatus {
+  DRAFT
+  PENDING_PING
+  APPROVED
+  DEGRADED
+  SUSPENDED
+  BANNED
+}
+
+enum ApiPricingModel {
+  PER_1K_CALLS
+  PER_UNIT
+  SUBSCRIPTION
+}
+
+enum MarketplaceUsageStatus {
+  RECEIVED
+  AUTHENTICATED
+  RESERVED
+  FORWARDED
+  COMPLETED
+  REFUNDED
+}
+
+enum LedgerAccountType {
+  CONSUMER_LIABILITY
+  CREATOR_PAYABLE
+  PLATFORM_FEE_REVENUE
+  REFUND_LIABILITY
+  SETTLEMENT_PENDING
+  SETTLEMENT_COMPLETED
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum CircuitBreakerState {
+  CLOSED
+  OPEN
+  HALF_OPEN
+}
+
+enum ReportStatus {
+  OPEN
+  RISK_REVIEW
+  ACTIONED
+  RESOLVED
+  DISMISSED
+}
+
+enum CreatorEarningStatus {
+  PENDING
+  AVAILABLE
+  FROZEN
+  SETTLEMENT_PENDING
+  SETTLED
+  REVERSED
+}
+
+enum MarketplaceKeyStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
 }

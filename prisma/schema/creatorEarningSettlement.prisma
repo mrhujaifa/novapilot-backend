@@ -1,0 +1,26 @@
+// Creator এর platform credit থেকে Circle settlement।
+// Idempotent — same key দিয়ে দুইবার settle হবে না।
+model CreatorEarningSettlement {
+  id        String @id @default(uuid())
+  creatorId String
+
+  amountUsdc Decimal              @db.Decimal(18, 6)
+  status     CreatorEarningStatus @default(PENDING)
+
+  idempotencyKey   String  @unique
+  // Circle থেকে আসা transfer ID — reconciliation এর জন্য।
+  circleTransferId String?
+  txHash           String?
+
+  attempts  Int     @default(0)
+  lastError String?
+
+  createdAt DateTime  @default(now())
+  settledAt DateTime?
+  updatedAt DateTime  @updatedAt
+
+  creator CreatorProfile @relation(fields: [creatorId], references: [id])
+
+  @@index([creatorId])
+  @@index([status])
+}
