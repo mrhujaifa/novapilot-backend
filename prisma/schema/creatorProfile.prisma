@@ -6,6 +6,11 @@ model CreatorProfile {
   displayName String?
   bio         String? @db.Text
   website     String?
+  avatarUrl   String?
+  companyName String? @db.VarChar(100)
+  country     String? @db.VarChar(100)
+  githubUrl   String?
+  twitterUrl  String?
 
   // Admin manually approve দিলে badge পাবে
   isVerified Boolean   @default(false)

@@ -8,6 +8,7 @@ import { usageRouter } from "../modules/usage/usage.route";
 import { walletRouter } from "../modules/wallet/wallet.routes";
 import { publicApiRouter } from "../modules/public/public-api.routes";
 import { publicAiRouter } from "../modules/public/public-ai.router";
+import { creatorRouter } from "../modules/marketplace/creator/creator.routes";
 
 const router = Router();
 
@@ -37,5 +38,8 @@ router.use("/ai", publicAiRouter);
 
 // Usage history & analytics
 router.use("/usage", usageRouter);
+
+// Marketplace
+router.use("/marketplace/creator", creatorRouter);
 
 export const indexRouter = router;
