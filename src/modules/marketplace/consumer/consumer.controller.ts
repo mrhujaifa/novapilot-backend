@@ -35,7 +35,23 @@ const getApiBySlug = asyncHandler(async (req, res) => {
   });
 });
 
+const subscribeToApi = asyncHandler(async (req, res) => {
+  const userId = req.user!.id;
+  const { slug } = req.params;
+
+  const result = await consumerService.subscribeToApi(userId, slug as string);
+
+  sendApiResponse(res, {
+    httpStatusCode: StatusCodes.CREATED,
+    success: true,
+    message:
+      "Subscribed successfully. Save your API key — it won't be shown again.",
+    data: result,
+  });
+});
+
 export const consumerController = {
   browseMarketplace,
   getApiBySlug,
+  subscribeToApi,
 };

@@ -2,7 +2,10 @@ import { prisma } from "../../lib/prisma";
 
 export async function seedModelPricing() {
   const models = await prisma.aiModel.findMany();
-  const pricing: Record<string, { inputPricePerM: number; outputPricePerM: number }> = {
+  const pricing: Record<
+    string,
+    { inputPricePerM: number; outputPricePerM: number }
+  > = {
     // ================= Google =================
     "gemini-2.5-flash-preview": {
       inputPricePerM: 0.3,
@@ -59,21 +62,6 @@ export async function seedModelPricing() {
     "deepseek-reasoner": {
       inputPricePerM: 0.55,
       outputPricePerM: 2.19,
-    },
-
-    // ================= OpenRouter =================
-    // Free models — internal billing rates for testing
-    "meta-llama/llama-3.3-8b-instruct:free": {
-      inputPricePerM: 0.05,
-      outputPricePerM: 0.2,
-    },
-    "mistralai/mistral-7b-instruct:free": {
-      inputPricePerM: 0.05,
-      outputPricePerM: 0.2,
-    },
-    "google/gemma-3-4b-it:free": {
-      inputPricePerM: 0.02,
-      outputPricePerM: 0.08,
     },
   };
 

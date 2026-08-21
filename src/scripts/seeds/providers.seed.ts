@@ -1,7 +1,7 @@
 import { prisma } from "../../lib/prisma";
 
 export async function seedProviders() {
-  const providers = ["Google", "Anthropic", "OpenAI", "xAI", "DeepSeek", "OpenRouter"];
+  const providers = ["Google", "Anthropic", "OpenAI", "xAI", "DeepSeek"];
 
   for (const name of providers) {
     await prisma.aiProvider.upsert({

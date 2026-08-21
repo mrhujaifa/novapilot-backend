@@ -74,22 +74,6 @@ export async function seedModels() {
       modelName: "deepseek-reasoner",
       displayName: "DeepSeek Reasoner",
     },
-
-    {
-      provider: "OpenRouter",
-      modelName: "meta-llama/llama-3.3-8b-instruct:free",
-      displayName: "Llama 3.3 8B (Free)",
-    },
-    {
-      provider: "OpenRouter",
-      modelName: "mistralai/mistral-7b-instruct:free",
-      displayName: "Mistral 7B (Free)",
-    },
-    {
-      provider: "OpenRouter",
-      modelName: "google/gemma-3-4b-it:free",
-      displayName: "Gemma 3 4B (Free)",
-    },
   ];
 
   for (const model of models) {

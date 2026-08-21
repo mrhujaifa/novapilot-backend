@@ -6,4 +6,4 @@ node_modules
 /dist
 /src/generated/prisma
 /docs
-.env.example
+.env.example    

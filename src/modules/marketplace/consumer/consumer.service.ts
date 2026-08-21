@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../errors/AppError";
 import { prisma } from "../../../lib/prisma";
@@ -100,7 +101,83 @@ const getApiBySlug = async (slug: string) => {
   return listing;
 };
 
+const subscribeToApi = async (userId: string, slug: string) => {
+  // ① API exist করে কিনা check
+  const listing = await prisma.apiListing.findUnique({
+    where: { apiSlug: slug },
+    include: {
+      priceVersions: { where: { isCurrent: true } },
+    },
+  });
+
+  if (!listing || listing.status !== "APPROVED") {
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "API not found",
+      ErrorCodes.API_NOT_FOUND,
+    );
+  }
+
+  // ② Already subscribed কিনা check
+  const existing = await prisma.marketplaceConsumerKey.findFirst({
+    where: {
+      userId,
+      apiId: listing.id,
+      status: "ACTIVE",
+    },
+  });
+
+  if (existing) {
+    throw new AppError(
+      StatusCodes.CONFLICT,
+      "Already subscribed to this API",
+      ErrorCodes.ALREADY_SUBSCRIBED,
+    );
+  }
+
+  // ③ API key generate করা
+  // plaintext শুধু একবার return হবে — DB তে store হবে না
+  const rawSecret = crypto.randomBytes(32).toString("hex");
+  const keyPrefix = "nvpt_live_";
+  const fullKey = `${keyPrefix}${rawSecret}`;
+
+  // SHA-256 hash করে store — plaintext কখনো DB তে যাবে না
+  const keyHash = crypto.createHash("sha256").update(fullKey).digest("hex");
+
+  // ④ Transaction — key + subscription একসাথে
+  await prisma.$transaction(async (tx) => {
+    await tx.marketplaceConsumerKey.create({
+      data: {
+        userId,
+        apiId: listing.id,
+        keyHash,
+        keyPrefix,
+        status: "ACTIVE",
+      },
+    });
+
+    await tx.apiSubscription.create({
+      data: {
+        userId,
+        apiId: listing.id,
+        priceVersionId: listing.priceVersions[0].id,
+        status: "ACTIVE",
+      },
+    });
+  });
+
+  // Plaintext key একবারই return — user কে এখনই copy করতে বলতে হবে
+  return {
+    apiKey: fullKey,
+    keyPrefix,
+    apiName: listing.apiName,
+    proxyEndpointUrl: listing.proxyEndpointUrl,
+    warning: "Copy this key now. It will never be shown again.",
+  };
+};
+
 export const consumerService = {
   browseMarketplace,
   getApiBySlug,
+  subscribeToApi,
 };
