@@ -9,6 +9,7 @@ import { walletRouter } from "../modules/wallet/wallet.routes";
 import { publicApiRouter } from "../modules/public/public-api.routes";
 import { publicAiRouter } from "../modules/public/public-ai.router";
 import { creatorRouter } from "../modules/marketplace/creator/creator.routes";
+import { listingRouter } from "../modules/marketplace/listing/listing.routes";
 
 const router = Router();
 
@@ -41,5 +42,6 @@ router.use("/usage", usageRouter);
 
 // Marketplace
 router.use("/marketplace/creator", creatorRouter);
+router.use("/marketplace/creator", listingRouter);
 
 export const indexRouter = router;
