@@ -22,7 +22,20 @@ const browseMarketplace = asyncHandler(async (req, res) => {
     },
   });
 });
+const getApiBySlug = asyncHandler(async (req, res) => {
+  const { slug } = req.params;
+
+  const result = await consumerService.getApiBySlug(slug as string);
+
+  sendApiResponse(res, {
+    httpStatusCode: StatusCodes.OK,
+    success: true,
+    message: "API fetched successfully",
+    data: result,
+  });
+});
 
 export const consumerController = {
   browseMarketplace,
+  getApiBySlug,
 };
