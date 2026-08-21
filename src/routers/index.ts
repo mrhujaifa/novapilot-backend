@@ -10,6 +10,7 @@ import { publicApiRouter } from "../modules/public/public-api.routes";
 import { publicAiRouter } from "../modules/public/public-ai.router";
 import { creatorRouter } from "../modules/marketplace/creator/creator.routes";
 import { listingRouter } from "../modules/marketplace/listing/listing.routes";
+import { consumerRouter } from "../modules/marketplace/consumer/consumer.routes";
 
 const router = Router();
 
@@ -43,5 +44,7 @@ router.use("/usage", usageRouter);
 // Marketplace
 router.use("/marketplace/creator", creatorRouter);
 router.use("/marketplace/creator", listingRouter);
+router.use("/marketplace/creator", listingRouter);
+router.use("/marketplace", consumerRouter);
 
 export const indexRouter = router;
