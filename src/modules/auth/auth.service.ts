@@ -10,7 +10,7 @@ import { initializeBalance } from "../billing/balance-init.service";
 import { ErrorCodes } from "../../errors/error-codes";
 
 const CURRENT_NETWORK: NetworkEnv =
-  env.CHAIN_ENV === "mainnet" ? "MAINNET" : "TESTNET";
+  env.CHAIN_ENV === "MAINNET" ? "MAINNET" : "TESTNET";
 
 // step 1: verify Privy token, return the userId (Privy DID) inside it
 export async function verifyIdentity(token: string): Promise<string> {

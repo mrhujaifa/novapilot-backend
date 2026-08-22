@@ -85,13 +85,13 @@ function getWalletSetId(): string {
 export async function createCircleWallet(
   userId: string,
 ): Promise<CreatedWallet> {
-  const BLOCKCHAIN = env.CHAIN_ENV === "mainnet" ? "ARC" : "ARC-TESTNET";
+  const BLOCKCHAIN = env.CHAIN_ENV === "MAINNET" ? "ARC" : "ARC-TESTNET";
 
   const existing = await prisma.wallet.findUnique({
     where: {
       userId_network: {
         userId,
-        network: env.CHAIN_ENV === "mainnet" ? "MAINNET" : "TESTNET",
+        network: env.CHAIN_ENV === "MAINNET" ? "MAINNET" : "TESTNET",
       },
     },
   });
