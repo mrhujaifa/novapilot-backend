@@ -10,6 +10,7 @@ declare global {
         walletAddress: string;
         network: string;
       };
+      creatorId?: string;
     }
   }
 }

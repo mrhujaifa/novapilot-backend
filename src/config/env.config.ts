@@ -35,7 +35,7 @@ const envSchema = z.object({
   CIRCLE_API_KEY: z.string().min(1), // Circle Developer-Controlled Wallets
   CIRCLE_ENTITY_SECRET: z.string().min(1),
   CIRCLE_WALLET_SET_ID: z.string(),
-  CHAIN_ENV: z.enum(["testnet", "mainnet"]).default("testnet"), // controls which Circle blockchain to use
+  CHAIN_ENV: z.enum(["TESTNET", "MAINNET"]).default("TESTNET"), // controls which Circle blockchain to use
   ALLOWED_ORIGINS: z.string().min(1), // cors allow
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),

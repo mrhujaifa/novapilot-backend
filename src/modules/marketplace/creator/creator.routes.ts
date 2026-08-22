@@ -6,6 +6,7 @@ import {
   updateCreatorProfileSchema,
 } from "./creator.schema";
 import { creatorController } from "./creator.controller";
+import { requireCreator } from "../../../middlewares/requireCreator";
 
 const router = Router();
 
@@ -16,11 +17,17 @@ router.post(
   creatorController.registerCreatorProfile,
 );
 
-router.get("/profile", requireAuth, creatorController.getCreatorProfile);
+router.get(
+  "/profile",
+  requireAuth,
+  requireCreator,
+  creatorController.getCreatorProfile,
+);
 
 router.patch(
   "/profile",
   requireAuth,
+  requireCreator,
   validateRequest(updateCreatorProfileSchema),
   creatorController.updateCreatorProfile,
 );
