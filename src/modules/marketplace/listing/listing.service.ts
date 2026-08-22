@@ -157,7 +157,47 @@ const getApiListing = async (userId: string) => {
   return result;
 };
 
+const getApiListingById = async (userId: string, apiId: string) => {
+  const creatorProfile = await prisma.creatorProfile.findUnique({
+    where: { userId },
+  });
+
+  if (!creatorProfile) {
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "Creator profile not found",
+      ErrorCodes.CREATOR_PROFILE_NOT_FOUND,
+    );
+  }
+
+  const listing = await prisma.apiListing.findUnique({
+    where: { id: apiId },
+    include: {
+      priceVersions: { where: { isCurrent: true } },
+    },
+  });
+
+  if (!listing) {
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "API not found",
+      ErrorCodes.API_NOT_FOUND,
+    );
+  }
+
+  if (listing.creatorId !== creatorProfile.id) {
+    throw new AppError(
+      StatusCodes.FORBIDDEN,
+      "Access denied",
+      ErrorCodes.AUTH_FORBIDDEN,
+    );
+  }
+
+  return listing;
+};
+
 export const listingService = {
   createApiListing,
   getApiListing,
+  getApiListingById,
 };

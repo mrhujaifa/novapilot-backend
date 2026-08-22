@@ -28,7 +28,22 @@ const getApiListing = asyncHandler(async (req, res) => {
   });
 });
 
+const getApiListingById = asyncHandler(async (req, res) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  const result = await listingService.getApiListingById(userId, id as string);
+
+  sendApiResponse(res, {
+    httpStatusCode: StatusCodes.OK,
+    success: true,
+    message: "API fetched successfully",
+    data: result,
+  });
+});
+
 export const listingController = {
   createApiListing,
   getApiListing,
+  getApiListingById,
 };

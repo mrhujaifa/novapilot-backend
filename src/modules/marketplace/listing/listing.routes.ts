@@ -21,4 +21,11 @@ router.get(
   listingController.getApiListing,
 );
 
+router.get(
+  "/apis/:id",
+  requireAuth,
+  requireCreator,
+  listingController.getApiListingById,
+);
+
 export const listingRouter = router;
