@@ -11,6 +11,7 @@ import { publicAiRouter } from "../modules/public/public-ai.router";
 import { creatorRouter } from "../modules/marketplace/creator/creator.routes";
 import { listingRouter } from "../modules/marketplace/listing/listing.routes";
 import { consumerRouter } from "../modules/marketplace/consumer/consumer.routes";
+import { earningRouter } from "../modules/marketplace/earnings/earning.routes";
 
 const router = Router();
 
@@ -44,7 +45,7 @@ router.use("/usage", usageRouter);
 // Marketplace
 router.use("/marketplace/creator", creatorRouter);
 router.use("/marketplace/creator", listingRouter);
-router.use("/marketplace/creator", listingRouter);
 router.use("/marketplace", consumerRouter);
+router.use("/marketplace/creator", earningRouter);
 
 export const indexRouter = router;
