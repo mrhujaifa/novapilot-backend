@@ -72,8 +72,21 @@ const updateCreatorProfile = asyncHandler(async (req, res) => {
   });
 });
 
+const getCreatorAnalytics = asyncHandler(async (req, res) => {
+  const userId = req.user!.id;
+  const result = await creatorService.getCreatorAnalytics(userId);
+
+  sendApiResponse(res, {
+    httpStatusCode: StatusCodes.OK,
+    success: true,
+    message: "Analytics fetched successfully",
+    data: result,
+  });
+});
+
 export const creatorController = {
   registerCreatorProfile,
   getCreatorProfile,
   updateCreatorProfile,
+  getCreatorAnalytics,
 };

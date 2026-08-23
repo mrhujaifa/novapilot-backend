@@ -12,6 +12,7 @@ import { creatorRouter } from "../modules/marketplace/creator/creator.routes";
 import { listingRouter } from "../modules/marketplace/listing/listing.routes";
 import { consumerRouter } from "../modules/marketplace/consumer/consumer.routes";
 import { earningRouter } from "../modules/marketplace/earnings/earning.routes";
+import { withdrawalRouter } from "../modules/marketplace/withdrawal/withdrawal.routes";
 
 const router = Router();
 
@@ -47,5 +48,6 @@ router.use("/marketplace/creator", creatorRouter);
 router.use("/marketplace/creator", listingRouter);
 router.use("/marketplace", consumerRouter);
 router.use("/marketplace/creator", earningRouter);
+router.use("/marketplace/creator", withdrawalRouter);
 
 export const indexRouter = router;

@@ -32,4 +32,11 @@ router.patch(
   creatorController.updateCreatorProfile,
 );
 
+router.get(
+  "/analytics",
+  requireAuth,
+  requireCreator,
+  creatorController.getCreatorAnalytics,
+);
+
 export const creatorRouter = router;
