@@ -13,6 +13,8 @@ import { listingRouter } from "../modules/marketplace/listing/listing.routes";
 import { consumerRouter } from "../modules/marketplace/consumer/consumer.routes";
 import { earningRouter } from "../modules/marketplace/earnings/earning.routes";
 import { withdrawalRouter } from "../modules/marketplace/withdrawal/withdrawal.routes";
+import { marketplaceAdminRouter } from "../modules/marketplace/admin/marketplace-admin.routes";
+import { proxyRouter } from "../modules/marketplace/proxy/proxy.routes";
 
 const router = Router();
 
@@ -34,12 +36,6 @@ router.use("/billing", billingRouter);
 // User API keys
 router.use("/api-keys", apiKeyRouter);
 
-// Public API (API key auth)
-router.use("/v1", publicApiRouter);
-
-// Public Ai (session auth)
-router.use("/ai", publicAiRouter);
-
 // Usage history & analytics
 router.use("/usage", usageRouter);
 
@@ -49,5 +45,11 @@ router.use("/marketplace/creator", listingRouter);
 router.use("/marketplace", consumerRouter);
 router.use("/marketplace/creator", earningRouter);
 router.use("/marketplace/creator", withdrawalRouter);
+router.use("/admin/marketplace", marketplaceAdminRouter);
+router.use("/v1/marketplace", proxyRouter);
+router.use("/v1", publicApiRouter);
+
+// Public Ai (session auth)
+router.use("/ai", publicAiRouter);
 
 export const indexRouter = router;

@@ -10,12 +10,11 @@ model Transaction {
   usageLogId     String?         @unique
   idempotencyKey String?         @unique
 
-  deposit                  Deposit?                @relation(fields: [depositId], references: [id])
-  usageLog                 UsageLog?               @relation(fields: [usageLogId], references: [id])
-  user                     User                    @relation(fields: [userId], references: [id])
+  deposit                  Deposit?  @relation(fields: [depositId], references: [id])
+  usageLog                 UsageLog? @relation(fields: [usageLogId], references: [id])
+  user                     User      @relation(fields: [userId], references: [id])
   // Marketplace এর জন্য নতুন optional link
-  marketplaceUsageRecordId String?                 @unique
-  marketplaceUsageRecord   MarketplaceUsageRecord? @relation(fields: [marketplaceUsageRecordId], references: [id])
+  marketplaceUsageRecordId String?   @unique
 
   @@index([userId])
   @@index([createdAt])

@@ -27,8 +27,6 @@ model MarketplaceLedgerEntry {
 
   createdAt DateTime @default(now())
 
-  api                      ApiListing?             @relation(fields: [apiId], references: [id])
-  marketplaceUsageRecord   MarketplaceUsageRecord? @relation(fields: [marketplaceUsageRecordId], references: [id])
   marketplaceUsageRecordId String?
 
   @@index([referenceId])
