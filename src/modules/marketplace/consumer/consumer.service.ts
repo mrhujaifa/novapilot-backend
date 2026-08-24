@@ -4,6 +4,7 @@ import { AppError } from "../../../errors/AppError";
 import { prisma } from "../../../lib/prisma";
 import {
   BrowseMarketplaceQuery,
+  MarketplaceUsageQuery,
   UpdateSubscriptionPayload,
 } from "./consumer.schema";
 import { ErrorCodes } from "../../../errors/error-codes";
@@ -444,6 +445,83 @@ const getMySubscriptions = async (userId: string) => {
   return subscriptions;
 };
 
+const getMyUsage = async (userId: string, query: MarketplaceUsageQuery) => {
+  const { page, limit, apiSlug } = query;
+
+  const skip = (page - 1) * limit;
+
+  const where = {
+    consumerKey: {
+      userId,
+    },
+
+    ...(apiSlug && {
+      api: {
+        apiSlug,
+      },
+    }),
+  };
+
+  const [records, total] = await Promise.all([
+    prisma.marketplaceUsageRecord.findMany({
+      where,
+      orderBy: [
+        {
+          createdAt: "desc",
+        },
+        {
+          id: "desc",
+        },
+      ],
+      skip,
+      take: limit,
+
+      select: {
+        id: true,
+        requestId: true,
+        status: true,
+        reservedAmountUsdc: true,
+        finalChargeUsdc: true,
+        latencyMs: true,
+        upstreamStatusCode: true,
+        network: true,
+        createdAt: true,
+
+        api: {
+          select: {
+            id: true,
+            apiName: true,
+            apiSlug: true,
+          },
+        },
+
+        priceVersion: {
+          select: {
+            id: true,
+            costPer1kCalls: true,
+          },
+        },
+      },
+    }),
+
+    prisma.marketplaceUsageRecord.count({
+      where,
+    }),
+  ]);
+
+  const totalPages = Math.ceil(total / limit);
+
+  return {
+    data: records,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages,
+    },
+  };
+};
+
 export const consumerService = {
   browseMarketplace,
   getApiBySlug,
@@ -451,4 +529,5 @@ export const consumerService = {
   unsubscribeFromApi,
   updateSubscription,
   getMySubscriptions,
+  getMyUsage,
 };

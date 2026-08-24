@@ -6,6 +6,8 @@ import { updateSubscriptionSchema } from "./consumer.schema";
 
 const router = Router();
 
+router.get("/usage", requireAuth, consumerController.getMyUsage);
+
 router.get(
   "/subscriptions",
   requireAuth,

@@ -2,7 +2,10 @@ import { StatusCodes } from "http-status-codes";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import { sendApiResponse } from "../../../utils/sendApiResponse";
 import { consumerService } from "./consumer.service";
-import { browseMarketplaceSchema } from "./consumer.schema";
+import {
+  browseMarketplaceSchema,
+  marketplaceUsageQuerySchema,
+} from "./consumer.schema";
 
 const browseMarketplace = asyncHandler(async (req, res) => {
   const query = browseMarketplaceSchema.parse(req.query);
@@ -101,6 +104,27 @@ const getMySubscriptions = asyncHandler(async (req, res) => {
   });
 });
 
+const getMyUsage = asyncHandler(async (req, res) => {
+  const userId = req.user!.id;
+
+  const query = marketplaceUsageQuerySchema.parse(req.query);
+
+  const result = await consumerService.getMyUsage(userId, query);
+
+  sendApiResponse(res, {
+    httpStatusCode: StatusCodes.OK,
+    success: true,
+    message: "Marketplace usage fetched successfully",
+    data: result.data,
+    meta: {
+      total: result.pagination.total,
+      page: result.pagination.page,
+      limit: result.pagination.limit,
+      totalPages: result.pagination.totalPages,
+    },
+  });
+});
+
 export const consumerController = {
   browseMarketplace,
   getApiBySlug,
@@ -108,4 +132,5 @@ export const consumerController = {
   unsubscribeFromApi,
   updateSubscription,
   getMySubscriptions,
+  getMyUsage,
 };
