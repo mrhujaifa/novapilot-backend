@@ -48,8 +48,8 @@ router.use("/marketplace/creator", withdrawalRouter);
 router.use("/admin/marketplace", marketplaceAdminRouter);
 router.use("/v1/marketplace", proxyRouter);
 router.use("/v1", publicApiRouter);
+router.use("/v1", publicAiRouter);
 
 // Public Ai (session auth)
-router.use("/ai", publicAiRouter);
 
 export const indexRouter = router;

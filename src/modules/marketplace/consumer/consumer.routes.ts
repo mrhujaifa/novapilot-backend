@@ -13,4 +13,10 @@ router.post(
   consumerController.subscribeToApi,
 );
 
+router.delete(
+  "/:slug/subscriptions",
+  requireAuth,
+  consumerController.unsubscribeFromApi,
+);
+
 export const consumerRouter = router;

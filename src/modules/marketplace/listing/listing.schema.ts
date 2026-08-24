@@ -21,7 +21,15 @@ const authSpecSchema = z
 const requestSpecSchema = z.object({
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
   pathTemplate: z.string().min(1),
-  headers: z.string().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  body: z
+    .object({
+      type: z.enum(["json", "form"]),
+      source: z.enum(["consumer", "static"]),
+      value: z.unknown().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const createApiListingSchema = z.object({

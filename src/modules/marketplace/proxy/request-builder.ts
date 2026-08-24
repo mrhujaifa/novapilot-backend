@@ -34,6 +34,9 @@ const HOP_BY_HOP = new Set([
   "content-length",
   "host",
   "authorization",
+
+  // Prevent upstream from returning compressed responses
+  "accept-encoding",
 ]);
 
 export const buildRequest = (

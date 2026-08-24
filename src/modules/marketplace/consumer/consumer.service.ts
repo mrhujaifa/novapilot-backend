@@ -176,8 +176,84 @@ const subscribeToApi = async (userId: string, slug: string) => {
   };
 };
 
+const unsubscribeFromApi = async (userId: string, slug: string) => {
+  // API খুঁজে বের করা
+  const listing = await prisma.apiListing.findUnique({
+    where: {
+      apiSlug: slug,
+    },
+    select: {
+      id: true,
+      apiName: true,
+    },
+  });
+
+  if (!listing) {
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "API not found",
+      ErrorCodes.API_NOT_FOUND,
+    );
+  }
+
+  // User-এর active subscription খোঁজা
+  const subscription = await prisma.apiSubscription.findFirst({
+    where: {
+      userId,
+      apiId: listing.id,
+      status: "ACTIVE",
+    },
+  });
+
+  if (!subscription) {
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "Active subscription not found",
+      ErrorCodes.SUBSCRIPTION_NOT_FOUND,
+    );
+  }
+
+  // Subscription cancel করা
+  const updatedSubscription = await prisma.apiSubscription.update({
+    where: {
+      id: subscription.id,
+    },
+    data: {
+      status: "CANCELLED",
+      cancelledAt: new Date(),
+    },
+    select: {
+      id: true,
+      status: true,
+      cancelledAt: true,
+      api: {
+        select: {
+          apiName: true,
+          apiSlug: true,
+        },
+      },
+    },
+  });
+
+  // Consumer key revoke করা
+  await prisma.marketplaceConsumerKey.updateMany({
+    where: {
+      userId,
+      apiId: listing.id,
+      status: "ACTIVE",
+    },
+    data: {
+      status: "REVOKED",
+      revokedAt: new Date(),
+    },
+  });
+
+  return updatedSubscription;
+};
+
 export const consumerService = {
   browseMarketplace,
   getApiBySlug,
   subscribeToApi,
+  unsubscribeFromApi,
 };
