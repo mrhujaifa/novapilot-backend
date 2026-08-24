@@ -88,10 +88,24 @@ const updateSubscription = asyncHandler(async (req, res) => {
   });
 });
 
+const getMySubscriptions = asyncHandler(async (req, res) => {
+  const userId = req.user!.id;
+
+  const result = await consumerService.getMySubscriptions(userId);
+
+  sendApiResponse(res, {
+    httpStatusCode: StatusCodes.OK,
+    success: true,
+    message: "Subscriptions fetched successfully",
+    data: result,
+  });
+});
+
 export const consumerController = {
   browseMarketplace,
   getApiBySlug,
   subscribeToApi,
   unsubscribeFromApi,
   updateSubscription,
+  getMySubscriptions,
 };

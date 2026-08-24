@@ -6,6 +6,12 @@ import { updateSubscriptionSchema } from "./consumer.schema";
 
 const router = Router();
 
+router.get(
+  "/subscriptions",
+  requireAuth,
+  consumerController.getMySubscriptions,
+);
+
 router.get("/", consumerController.browseMarketplace);
 router.get("/:slug", consumerController.getApiBySlug);
 

@@ -385,10 +385,70 @@ const updateSubscription = async (
   return updatedSubscription;
 };
 
+const getMySubscriptions = async (userId: string) => {
+  const subscriptions = await prisma.apiSubscription.findMany({
+    where: {
+      userId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    select: {
+      id: true,
+      status: true,
+      startedAt: true,
+      pausedAt: true,
+      cancelledAt: true,
+      createdAt: true,
+      updatedAt: true,
+
+      api: {
+        select: {
+          id: true,
+          apiName: true,
+          apiSlug: true,
+          description: true,
+          category: true,
+          proxyEndpointUrl: true,
+          pricingModel: true,
+          status: true,
+          uptimePercent: true,
+          avgLatencyMs: true,
+          successfulCalls: true,
+
+          creator: {
+            select: {
+              displayName: true,
+              country: true,
+              isVerified: true,
+              avatarUrl: true,
+              companyName: true,
+            },
+          },
+
+          priceVersions: {
+            where: {
+              isCurrent: true,
+            },
+            select: {
+              id: true,
+              costPer1kCalls: true,
+            },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  return subscriptions;
+};
+
 export const consumerService = {
   browseMarketplace,
   getApiBySlug,
   subscribeToApi,
   unsubscribeFromApi,
   updateSubscription,
+  getMySubscriptions,
 };
