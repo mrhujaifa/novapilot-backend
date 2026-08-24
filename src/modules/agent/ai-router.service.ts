@@ -172,11 +172,47 @@ export async function fetchConversationMessages(
       orderBy: { createdAt: "asc" },
       take: limit,
       skip: offset,
+      include: {
+        modelPricing: {
+          select: {
+            id: true,
+            aiModel: {
+              select: {
+                modelName: true,
+                displayName: true,
+              },
+            },
+          },
+        },
+      },
     }),
-    prisma.message.count({ where: { conversationId } }),
+
+    prisma.message.count({
+      where: { conversationId },
+    }),
   ]);
 
-  return { messages, total };
+  const mappedMessages = messages.map((message) => ({
+    id: message.id,
+    conversationId: message.conversationId,
+    role: message.role,
+    content: message.content,
+    modelPricingId: message.modelPricingId,
+    model:
+      message.role === "assistant"
+        ? (message.modelPricing?.aiModel.displayName ??
+          message.modelPricing?.aiModel.modelName ??
+          null)
+        : null,
+    inputTokens: message.inputTokens,
+    outputTokens: message.outputTokens,
+    createdAt: message.createdAt,
+  }));
+
+  return {
+    messages: mappedMessages,
+    total,
+  };
 }
 
 /**
