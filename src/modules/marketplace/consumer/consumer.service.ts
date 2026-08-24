@@ -2,7 +2,10 @@ import crypto from "crypto";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../errors/AppError";
 import { prisma } from "../../../lib/prisma";
-import { BrowseMarketplaceQuery } from "./consumer.schema";
+import {
+  BrowseMarketplaceQuery,
+  UpdateSubscriptionPayload,
+} from "./consumer.schema";
 import { ErrorCodes } from "../../../errors/error-codes";
 
 const browseMarketplace = async (query: BrowseMarketplaceQuery) => {
@@ -251,9 +254,141 @@ const unsubscribeFromApi = async (userId: string, slug: string) => {
   return updatedSubscription;
 };
 
+const updateSubscription = async (
+  userId: string,
+  slug: string,
+  payload: UpdateSubscriptionPayload,
+) => {
+  const { action } = payload;
+
+  /*
+   * Find the API
+   */
+  const listing = await prisma.apiListing.findUnique({
+    where: {
+      apiSlug: slug,
+    },
+    select: {
+      id: true,
+      apiName: true,
+      apiSlug: true,
+    },
+  });
+
+  if (!listing) {
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "API not found",
+      ErrorCodes.API_NOT_FOUND,
+    );
+  }
+
+  /*
+   * Find the user's subscription
+   * We intentionally don't filter by status here.
+   * We need to distinguish:
+   * ACTIVE  -> PAUSE
+   * PAUSED  -> RESUME
+   * CANCELLED -> invalid
+   */
+  const subscription = await prisma.apiSubscription.findUnique({
+    where: {
+      userId_apiId: {
+        userId,
+        apiId: listing.id,
+      },
+    },
+    select: {
+      id: true,
+      status: true,
+      startedAt: true,
+      pausedAt: true,
+      cancelledAt: true,
+    },
+  });
+
+  if (!subscription) {
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "Subscription not found",
+      ErrorCodes.SUBSCRIPTION_NOT_FOUND,
+    );
+  }
+
+  /*
+   *  Validate state transition
+   */
+  if (subscription.status === "CANCELLED") {
+    throw new AppError(
+      StatusCodes.CONFLICT,
+      "Cancelled subscriptions cannot be paused or resumed",
+      ErrorCodes.SUBSCRIPTION_ALREADY_CANCELLED,
+    );
+  }
+
+  if (action === "PAUSE" && subscription.status === "PAUSED") {
+    throw new AppError(
+      StatusCodes.CONFLICT,
+      "Subscription is already paused",
+      ErrorCodes.SUBSCRIPTION_ALREADY_PAUSED,
+    );
+  }
+
+  if (action === "RESUME" && subscription.status === "ACTIVE") {
+    throw new AppError(
+      StatusCodes.CONFLICT,
+      "Subscription is already active",
+      ErrorCodes.SUBSCRIPTION_ALREADY_ACTIVE,
+    );
+  }
+
+  /*
+   * Atomic state transition
+   * Only subscription state changes.
+   * Consumer key remains ACTIVE so it can be used again
+   * when the subscription is resumed.
+   */
+  const updatedSubscription = await prisma.$transaction(async (tx) => {
+    const updated = await tx.apiSubscription.update({
+      where: {
+        id: subscription.id,
+      },
+      data:
+        action === "PAUSE"
+          ? {
+              status: "PAUSED",
+              pausedAt: new Date(),
+            }
+          : {
+              status: "ACTIVE",
+              pausedAt: null,
+            },
+      select: {
+        id: true,
+        status: true,
+        startedAt: true,
+        pausedAt: true,
+        cancelledAt: true,
+        updatedAt: true,
+        api: {
+          select: {
+            apiName: true,
+            apiSlug: true,
+          },
+        },
+      },
+    });
+
+    return updated;
+  });
+
+  return updatedSubscription;
+};
+
 export const consumerService = {
   browseMarketplace,
   getApiBySlug,
   subscribeToApi,
   unsubscribeFromApi,
+  updateSubscription,
 };

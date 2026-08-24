@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { consumerController } from "./consumer.controller";
 import { requireAuth } from "../../auth/auth.middleware";
+import { validateRequest } from "../../../middlewares/validateRequest";
+import { updateSubscriptionSchema } from "./consumer.schema";
 
 const router = Router();
 
@@ -11,6 +13,13 @@ router.post(
   "/:slug/subscriptions",
   requireAuth,
   consumerController.subscribeToApi,
+);
+
+router.patch(
+  "/:slug/subscriptions",
+  requireAuth,
+  validateRequest(updateSubscriptionSchema),
+  consumerController.updateSubscription,
 );
 
 router.delete(

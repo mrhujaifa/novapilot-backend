@@ -8,4 +8,11 @@ export const browseMarketplaceSchema = z.object({
   limit: z.coerce.number().max(50).default(10),
 });
 
+export const updateSubscriptionSchema = z.object({
+  action: z.enum(["PAUSE", "RESUME"]),
+});
+
 export type BrowseMarketplaceQuery = z.infer<typeof browseMarketplaceSchema>;
+export type UpdateSubscriptionPayload = z.infer<
+  typeof updateSubscriptionSchema
+>;

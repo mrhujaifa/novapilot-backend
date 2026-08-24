@@ -67,9 +67,31 @@ const unsubscribeFromApi = asyncHandler(async (req, res) => {
   });
 });
 
+const updateSubscription = asyncHandler(async (req, res) => {
+  const userId = req.user!.id;
+  const { slug } = req.params;
+
+  const result = await consumerService.updateSubscription(
+    userId,
+    slug as string,
+    req.body,
+  );
+
+  sendApiResponse(res, {
+    httpStatusCode: StatusCodes.OK,
+    success: true,
+    message:
+      req.body.action === "PAUSE"
+        ? "Subscription paused successfully"
+        : "Subscription resumed successfully",
+    data: result,
+  });
+});
+
 export const consumerController = {
   browseMarketplace,
   getApiBySlug,
   subscribeToApi,
   unsubscribeFromApi,
+  updateSubscription,
 };
