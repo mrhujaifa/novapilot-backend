@@ -125,6 +125,24 @@ const getMyUsage = asyncHandler(async (req, res) => {
   });
 });
 
+const reportApi = asyncHandler(async (req, res) => {
+  const userId = req.user!.id;
+  const { slug } = req.params;
+
+  const result = await consumerService.reportApi(
+    userId,
+    slug as string,
+    req.body,
+  );
+
+  sendApiResponse(res, {
+    httpStatusCode: StatusCodes.CREATED,
+    success: true,
+    message: "API reported successfully",
+    data: result,
+  });
+});
+
 export const consumerController = {
   browseMarketplace,
   getApiBySlug,
@@ -133,4 +151,5 @@ export const consumerController = {
   updateSubscription,
   getMySubscriptions,
   getMyUsage,
+  reportApi,
 };

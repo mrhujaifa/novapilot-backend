@@ -4,6 +4,7 @@ import { AppError } from "../../../errors/AppError";
 import { prisma } from "../../../lib/prisma";
 import {
   BrowseMarketplaceQuery,
+  CreateApiReportPayload,
   MarketplaceUsageQuery,
   UpdateSubscriptionPayload,
 } from "./consumer.schema";
@@ -522,6 +523,107 @@ const getMyUsage = async (userId: string, query: MarketplaceUsageQuery) => {
   };
 };
 
+const reportApi = async (
+  userId: string,
+  slug: string,
+  payload: CreateApiReportPayload,
+) => {
+  /*
+   * Find the API
+   * Only approved marketplace APIs can be reported.
+   */
+  const listing = await prisma.apiListing.findUnique({
+    where: {
+      apiSlug: slug,
+    },
+    select: {
+      id: true,
+      apiName: true,
+      apiSlug: true,
+      status: true,
+      creatorId: true,
+    },
+  });
+
+  if (!listing || listing.status !== "APPROVED") {
+    throw new AppError(
+      StatusCodes.NOT_FOUND,
+      "API not found",
+      ErrorCodes.API_NOT_FOUND,
+    );
+  }
+
+  /*
+   * Prevent creator from reporting their own API
+   */
+  const creator = await prisma.creatorProfile.findUnique({
+    where: {
+      id: listing.creatorId,
+    },
+    select: {
+      userId: true,
+    },
+  });
+
+  if (creator?.userId === userId) {
+    throw new AppError(
+      StatusCodes.FORBIDDEN,
+      "You cannot report your own API",
+      ErrorCodes.CANNOT_REPORT_OWN_API,
+    );
+  }
+
+  /*
+   * Create report + increment report counter atomically
+   */
+  const report = await prisma.$transaction(async (tx) => {
+    const createdReport = await tx.apiReport.create({
+      data: {
+        apiId: listing.id,
+        reporterUserId: userId,
+        reason: payload.reason,
+        evidence: payload.evidence ?? null,
+
+        // Controlled by the system, not the client.
+        status: "OPEN",
+        riskScore: 0,
+      },
+
+      select: {
+        id: true,
+        apiId: true,
+        reporterUserId: true,
+        reason: true,
+        evidence: true,
+        status: true,
+        riskScore: true,
+        createdAt: true,
+      },
+    });
+
+    await tx.apiListing.update({
+      where: {
+        id: listing.id,
+      },
+      data: {
+        reportCount: {
+          increment: 1,
+        },
+      },
+    });
+
+    return createdReport;
+  });
+
+  return {
+    ...report,
+    api: {
+      apiName: listing.apiName,
+      apiSlug: listing.apiSlug,
+    },
+  };
+};
+
 export const consumerService = {
   browseMarketplace,
   getApiBySlug,
@@ -530,4 +632,5 @@ export const consumerService = {
   updateSubscription,
   getMySubscriptions,
   getMyUsage,
+  reportApi,
 };

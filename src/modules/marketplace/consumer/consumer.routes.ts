@@ -2,7 +2,10 @@ import { Router } from "express";
 import { consumerController } from "./consumer.controller";
 import { requireAuth } from "../../auth/auth.middleware";
 import { validateRequest } from "../../../middlewares/validateRequest";
-import { updateSubscriptionSchema } from "./consumer.schema";
+import {
+  createApiReportSchema,
+  updateSubscriptionSchema,
+} from "./consumer.schema";
 
 const router = Router();
 
@@ -34,6 +37,13 @@ router.delete(
   "/:slug/subscriptions",
   requireAuth,
   consumerController.unsubscribeFromApi,
+);
+
+router.post(
+  "/:slug/reports",
+  requireAuth,
+  validateRequest(createApiReportSchema),
+  consumerController.reportApi,
 );
 
 export const consumerRouter = router;

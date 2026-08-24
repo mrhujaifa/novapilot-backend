@@ -18,8 +18,23 @@ export const marketplaceUsageQuerySchema = z.object({
   apiSlug: z.string().trim().min(1).optional(),
 });
 
+export const createApiReportSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(10, "Report reason must be at least 10 characters")
+    .max(2000, "Report reason must not exceed 2000 characters"),
+
+  evidence: z
+    .string()
+    .trim()
+    .max(5000, "Evidence must not exceed 5000 characters")
+    .optional(),
+});
+
 export type BrowseMarketplaceQuery = z.infer<typeof browseMarketplaceSchema>;
 export type UpdateSubscriptionPayload = z.infer<
   typeof updateSubscriptionSchema
 >;
 export type MarketplaceUsageQuery = z.infer<typeof marketplaceUsageQuerySchema>;
+export type CreateApiReportPayload = z.infer<typeof createApiReportSchema>;
