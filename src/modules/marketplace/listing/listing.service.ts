@@ -6,7 +6,8 @@ import { prisma } from "../../../lib/prisma";
 import { ErrorCodes } from "../../../errors/error-codes";
 import { AppError } from "../../../errors/AppError";
 import { CreateApiListingInput, UpdateApiListingInput } from "./listing.schema";
-import { CredentialType, NetworkEnv } from "../../../generated/prisma";
+import { CredentialType } from "../../../generated/prisma";
+import { CURRENT_NETWORK } from "../../../config/network.config";
 import { encryptCredential } from "../proxy/auth-engine";
 import { validateSsrf } from "../proxy/security/ssrf.service";
 
@@ -54,7 +55,7 @@ const createApiListing = async (
         authSpec: input.authSpec ?? undefined,
         pricingModel: input.pricingModel,
         status: "PENDING_PING",
-        network: process.env.CHAIN_ENV as NetworkEnv,
+        network: CURRENT_NETWORK,
       },
     });
 
