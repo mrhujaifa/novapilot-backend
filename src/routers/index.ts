@@ -27,6 +27,9 @@ router.use("/wallet", walletRouter);
 // AI chat
 router.use("/chat", aiRouter);
 
+// Dashboard AI completion endpoint — session auth
+router.use("/ai", publicAiRouter);
+
 // Available AI models
 router.use("/models", modelsRouter);
 
