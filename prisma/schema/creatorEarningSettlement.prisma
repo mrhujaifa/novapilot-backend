@@ -3,6 +3,8 @@
 model CreatorEarningSettlement {
   id        String @id @default(uuid())
   creatorId String
+  usageRecordId String? @unique
+  network NetworkEnv?
 
   amountUsdc Decimal              @db.Decimal(18, 6)
   status     CreatorEarningStatus @default(PENDING)

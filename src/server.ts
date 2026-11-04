@@ -3,9 +3,14 @@ import { env } from "./config/env.config";
 import { logger } from "./lib/logger";
 import { connectRedis } from "./lib/redis";
 import { prisma } from "./lib/prisma";
+import { reconcileMarketplacePayouts } from "./modules/marketplace/earnings/payout.job";
 
 async function bootstrap() {
   await connectRedis();
+  const payoutTimer = setInterval(() => {
+    reconcileMarketplacePayouts().catch((err) => logger.error({ err }, "Marketplace payout reconciliation failed"));
+  }, 60_000);
+  payoutTimer.unref();
 
   // Graceful shutdown — handle SIGTERM (sent by Render/Docker on deploy/scale-down)
   // and SIGINT (Ctrl+C in local dev). Active requests finish before the process exits.
@@ -14,6 +19,7 @@ async function bootstrap() {
   });
 
   const shutdown = (signal: string) => {
+    clearInterval(payoutTimer);
     logger.info(
       { signal },
       "Shutdown signal received, closing server gracefully",

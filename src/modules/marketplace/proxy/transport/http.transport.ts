@@ -47,6 +47,8 @@ export const executeHttpRequest = (
 
       res.writeHead(statusCode, responseHeaders);
       proxyRes.pipe(res);
+      proxyRes.on("error", onError);
+      proxyRes.on("aborted", () => onError(new Error("Upstream response aborted")));
 
       proxyRes.on("end", () => {
         onComplete(statusCode, latencyMs);
@@ -55,6 +57,7 @@ export const executeHttpRequest = (
   );
 
   proxyReq.on("error", onError);
+  proxyReq.setTimeout(30_000, () => proxyReq.destroy(new Error("Upstream request timed out")));
 
   if (builtRequest.body) {
     proxyReq.write(builtRequest.body);

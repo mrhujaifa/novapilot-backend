@@ -14,6 +14,11 @@ export function globalErrorHandler(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction,
 ): void {
+  if (res.headersSent) {
+    logger.error({ err, path: req.originalUrl, method: req.method }, "Request failed after response headers were sent");
+    _next(err);
+    return;
+  }
   // Zod validation error — always safe to expose field-level details.
   if (err instanceof ZodError) {
     sendApiResponse(res, {

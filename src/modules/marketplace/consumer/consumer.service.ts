@@ -9,6 +9,8 @@ import {
   UpdateSubscriptionPayload,
 } from "./consumer.schema";
 import { ErrorCodes } from "../../../errors/error-codes";
+import { Prisma } from "../../../generated/prisma/client";
+import { proxyEndpointFor } from "../shared/proxy-endpoint";
 
 const browseMarketplace = async (query: BrowseMarketplaceQuery) => {
   const { search, category, sort, page, limit } = query;
@@ -27,16 +29,28 @@ const browseMarketplace = async (query: BrowseMarketplaceQuery) => {
   // sort field map করা হচ্ছে — user input directly DB field এ use করা যাবে না
   const orderBy = {
     calls: { successfulCalls: "desc" as const },
-    price: { priceVersions: { _count: "asc" as const } },
+    price: { id: "asc" as const },
     latency: { avgLatencyMs: "asc" as const },
   }[sort ?? "calls"];
 
-  const [data, total] = await Promise.all([
+  const priceIds = sort === "price" ? await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT a.id FROM "ApiListing" a
+    LEFT JOIN LATERAL (
+      SELECT "costPer1kCalls" FROM "ApiPriceVersion"
+      WHERE "apiId" = a.id AND "isCurrent" = true
+      ORDER BY "effectiveFrom" DESC, id DESC LIMIT 1
+    ) price ON true
+    WHERE a.status = 'APPROVED'
+      ${category ? Prisma.sql`AND a.category = ${category}` : Prisma.empty}
+      ${search ? Prisma.sql`AND (a."apiName" ILIKE ${`%${search}%`} OR a.description ILIKE ${`%${search}%`})` : Prisma.empty}
+    ORDER BY price."costPer1kCalls" ASC NULLS LAST, a.id ASC
+    LIMIT ${limit} OFFSET ${(page - 1) * limit}
+  `) : undefined;
+  const [rows, total] = await Promise.all([
     prisma.apiListing.findMany({
-      where,
+      where: { ...where, ...(priceIds && { id: { in: priceIds.map((row) => row.id) } }) },
       orderBy,
-      skip: (page - 1) * limit,
-      take: limit,
+      ...(!priceIds && { skip: (page - 1) * limit, take: limit }),
       include: {
         priceVersions: {
           where: { isCurrent: true },
@@ -55,6 +69,8 @@ const browseMarketplace = async (query: BrowseMarketplaceQuery) => {
     }),
     prisma.apiListing.count({ where }),
   ]);
+  const data = (priceIds ? priceIds.flatMap(({ id }) => rows.filter((row) => row.id === id)) : rows)
+    .map((listing) => ({ ...listing, proxyEndpointUrl: proxyEndpointFor(listing.apiSlug) }));
 
   return {
     data,
@@ -103,7 +119,7 @@ const getApiBySlug = async (slug: string) => {
     );
   }
 
-  return listing;
+  return { ...listing, proxyEndpointUrl: proxyEndpointFor(listing.apiSlug) };
 };
 
 const subscribeToApi = async (userId: string, slug: string) => {
@@ -139,6 +155,8 @@ const subscribeToApi = async (userId: string, slug: string) => {
       ErrorCodes.ALREADY_SUBSCRIBED,
     );
   }
+  const priceVersion = listing.priceVersions[0];
+  if (!priceVersion) throw new AppError(503, "API pricing is not configured", ErrorCodes.SERVICE_UNAVAILABLE, { expose: true });
 
   // ③ API key generate করা
   // plaintext শুধু একবার return হবে — DB তে store হবে না
@@ -151,6 +169,22 @@ const subscribeToApi = async (userId: string, slug: string) => {
 
   // ④ Transaction — key + subscription একসাথে
   await prisma.$transaction(async (tx) => {
+    // Claim the unique subscription row before issuing its key. Concurrent
+    // subscribe calls must not each return a valid new credential.
+    const subscription = await tx.apiSubscription.upsert({
+      where: { userId_apiId: { userId, apiId: listing.id } },
+      create: { userId, apiId: listing.id, priceVersionId: priceVersion.id, status: "CANCELLED" },
+      update: {},
+    });
+    const activated = await tx.apiSubscription.updateMany({
+      where: { id: subscription.id, status: "CANCELLED" },
+      data: { status: "ACTIVE", priceVersionId: priceVersion.id, startedAt: new Date(), pausedAt: null, cancelledAt: null },
+    });
+    if (activated.count !== 1) throw new AppError(409, "Already subscribed to this API", ErrorCodes.ALREADY_SUBSCRIBED);
+    await tx.marketplaceConsumerKey.updateMany({
+      where: { userId, apiId: listing.id, status: "ACTIVE" },
+      data: { status: "REVOKED", revokedAt: new Date() },
+    });
     await tx.marketplaceConsumerKey.create({
       data: {
         userId,
@@ -161,14 +195,6 @@ const subscribeToApi = async (userId: string, slug: string) => {
       },
     });
 
-    await tx.apiSubscription.create({
-      data: {
-        userId,
-        apiId: listing.id,
-        priceVersionId: listing.priceVersions[0].id,
-        status: "ACTIVE",
-      },
-    });
   });
 
   // Plaintext key একবারই return — user কে এখনই copy করতে বলতে হবে
@@ -176,7 +202,7 @@ const subscribeToApi = async (userId: string, slug: string) => {
     apiKey: fullKey,
     keyPrefix,
     apiName: listing.apiName,
-    proxyEndpointUrl: listing.proxyEndpointUrl,
+    proxyEndpointUrl: proxyEndpointFor(listing.apiSlug),
     warning: "Copy this key now. It will never be shown again.",
   };
 };
@@ -206,7 +232,7 @@ const unsubscribeFromApi = async (userId: string, slug: string) => {
     where: {
       userId,
       apiId: listing.id,
-      status: "ACTIVE",
+      status: { in: ["ACTIVE", "PAUSED"] },
     },
   });
 
@@ -219,7 +245,8 @@ const unsubscribeFromApi = async (userId: string, slug: string) => {
   }
 
   // Subscription cancel করা
-  const updatedSubscription = await prisma.apiSubscription.update({
+  const updatedSubscription = await prisma.$transaction(async (tx) => {
+  const updated = await tx.apiSubscription.update({
     where: {
       id: subscription.id,
     },
@@ -241,7 +268,7 @@ const unsubscribeFromApi = async (userId: string, slug: string) => {
   });
 
   // Consumer key revoke করা
-  await prisma.marketplaceConsumerKey.updateMany({
+  await tx.marketplaceConsumerKey.updateMany({
     where: {
       userId,
       apiId: listing.id,
@@ -253,6 +280,8 @@ const unsubscribeFromApi = async (userId: string, slug: string) => {
     },
   });
 
+  return updated;
+  });
   return updatedSubscription;
 };
 
@@ -351,9 +380,10 @@ const updateSubscription = async (
    * when the subscription is resumed.
    */
   const updatedSubscription = await prisma.$transaction(async (tx) => {
-    const updated = await tx.apiSubscription.update({
+    const changed = await tx.apiSubscription.updateMany({
       where: {
         id: subscription.id,
+        status: subscription.status,
       },
       data:
         action === "PAUSE"
@@ -365,6 +395,10 @@ const updateSubscription = async (
               status: "ACTIVE",
               pausedAt: null,
             },
+    });
+    if (changed.count !== 1) throw new AppError(409, "Subscription changed. Please refresh and try again.", ErrorCodes.CONFLICT_ERROR);
+    const updated = await tx.apiSubscription.findUniqueOrThrow({
+      where: { id: subscription.id },
       select: {
         id: true,
         status: true,
@@ -443,7 +477,10 @@ const getMySubscriptions = async (userId: string) => {
     },
   });
 
-  return subscriptions;
+  return subscriptions.map((subscription) => ({
+    ...subscription,
+    api: { ...subscription.api, proxyEndpointUrl: proxyEndpointFor(subscription.api.apiSlug) },
+  }));
 };
 
 const getMyUsage = async (userId: string, query: MarketplaceUsageQuery) => {
@@ -581,7 +618,7 @@ const reportApi = async (
       data: {
         apiId: listing.id,
         reporterUserId: userId,
-        reason: payload.reason,
+        reason: payload.description ? `${payload.reason}: ${payload.description}` : payload.reason,
         evidence: payload.evidence ?? null,
 
         // Controlled by the system, not the client.

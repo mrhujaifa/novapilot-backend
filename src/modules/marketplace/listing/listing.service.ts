@@ -10,6 +10,7 @@ import { CredentialType } from "../../../generated/prisma";
 import { CURRENT_NETWORK } from "../../../config/network.config";
 import { encryptCredential } from "../proxy/auth-engine";
 import { validateSsrf } from "../proxy/security/ssrf.service";
+import { proxyEndpointFor } from "../shared/proxy-endpoint";
 
 const createApiListing = async (
   userId: string,
@@ -50,7 +51,7 @@ const createApiListing = async (
         description: input.description,
         category: input.category,
         targetBaseUrl: input.targetBaseUrl,
-        proxyEndpointUrl: `${process.env.PROXY_BASE_URL}/v1/${input.apiSlug}`,
+        proxyEndpointUrl: proxyEndpointFor(input.apiSlug),
         requestSpec: input.requestSpec as any,
         authSpec: input.authSpec ?? undefined,
         pricingModel: input.pricingModel,
@@ -139,7 +140,7 @@ const getApiListing = async (userId: string) => {
     },
   });
 
-  return result;
+  return result.map((listing) => ({ ...listing, proxyEndpointUrl: proxyEndpointFor(listing.apiSlug) }));
 };
 
 const getApiListingById = async (userId: string, apiId: string) => {
@@ -178,7 +179,7 @@ const getApiListingById = async (userId: string, apiId: string) => {
     );
   }
 
-  return listing;
+  return { ...listing, proxyEndpointUrl: proxyEndpointFor(listing.apiSlug) };
 };
 
 export const listingService = {

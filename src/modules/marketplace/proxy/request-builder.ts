@@ -54,14 +54,17 @@ export const buildRequest = (
   // Consumer path থেকে dynamic segments extract
   const templateParts = requestSpec.pathTemplate.split("/").filter(Boolean);
   const consumerParts = consumerPath.split("/").filter(Boolean);
-  templateParts.forEach((part, i) => {
+  let consumerIndex = 0;
+  templateParts.forEach((part) => {
     if (part.startsWith("{") && part.endsWith("}")) {
       const varName = part.slice(1, -1);
-      // auth path var already আছে → skip (credential)
-      if (!allPathVars[varName] && consumerParts[i]) {
-        allPathVars[varName] = consumerParts[i];
+      // Provider credential segments are absent from the consumer URL.
+      if (Object.hasOwn(allPathVars, varName)) return;
+      if (consumerParts[consumerIndex]) {
+        allPathVars[varName] = consumerParts[consumerIndex];
       }
     }
+    consumerIndex++;
   });
 
   // Path resolve
@@ -73,8 +76,8 @@ export const buildRequest = (
   // Query params — spec + auth + consumer merge
   const queryParams = new URLSearchParams({
     ...(requestSpec.query ?? {}),
-    ...auth.query,
     ...consumerQuery,
+    ...auth.query,
   });
 
   const queryString = queryParams.toString();

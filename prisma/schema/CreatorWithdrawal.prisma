@@ -3,6 +3,7 @@
 model CreatorWithdrawal {
     id        String @id @default(uuid())
     creatorId String
+    network NetworkEnv?
 
     amountUsdc Decimal @db.Decimal(18, 6)
 

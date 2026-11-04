@@ -4,8 +4,8 @@ export const browseMarketplaceSchema = z.object({
   search: z.string().optional(),
   category: z.string().optional(),
   sort: z.enum(["calls", "price", "latency"]).optional(),
-  page: z.coerce.number().default(1),
-  limit: z.coerce.number().max(50).default(10),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
 });
 
 export const updateSubscriptionSchema = z.object({
@@ -19,11 +19,12 @@ export const marketplaceUsageQuerySchema = z.object({
 });
 
 export const createApiReportSchema = z.object({
-  reason: z
+  reason: z.union([z.enum(["BROKEN_API", "INCORRECT_INFORMATION", "SECURITY_ISSUE", "ABUSE", "OTHER"]), z
     .string()
     .trim()
     .min(10, "Report reason must be at least 10 characters")
-    .max(2000, "Report reason must not exceed 2000 characters"),
+    .max(2000, "Report reason must not exceed 2000 characters")]),
+  description: z.string().trim().max(2000).optional(),
 
   evidence: z
     .string()

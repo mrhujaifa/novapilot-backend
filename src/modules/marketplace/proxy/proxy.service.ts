@@ -8,6 +8,7 @@ import { validateSsrf } from "./security/ssrf.service";
 import { applyAuth, AuthSpec } from "./auth-engine";
 import { buildRequest, RequestSpec } from "./request-builder";
 import { executeHttpRequest } from "./transport/http.transport";
+import { logger } from "../../../lib/logger";
 import {
   reserveUsage,
   finalizeUsage,
@@ -78,22 +79,15 @@ export const proxyRequest = async (
 
   const costPerCall = parseFloat(priceVersion.costPer1kCalls.toString()) / 1000;
 
-  // ② Balance reserve
-  let usageRecord;
-  try {
-    usageRecord = await reserveUsage(
-      consumerKey.id,
-      consumerKey.userId,
-      consumerKey.api.id,
-      priceVersion.id,
-      consumerKey.api.network,
-      costPerCall,
-    );
-  } catch {
+  const subscription = await prisma.apiSubscription.findUnique({
+    where: { userId_apiId: { userId: consumerKey.userId, apiId: consumerKey.api.id } },
+    select: { status: true },
+  });
+  if (subscription?.status !== "ACTIVE") {
     throw new AppError(
-      StatusCodes.PAYMENT_REQUIRED,
-      "Insufficient USDC balance",
-      ErrorCodes.INSUFFICIENT_BALANCE,
+      StatusCodes.FORBIDDEN,
+      "An active subscription is required to call this API",
+      ErrorCodes.AUTH_FORBIDDEN,
     );
   }
 
@@ -109,9 +103,10 @@ export const proxyRequest = async (
   );
 
   // ④ Request build
-  const requestSpec = consumerKey.api.requestSpec as any;
+  const requestSpec = consumerKey.api.requestSpec as unknown as RequestSpec;
 
-  const consumerPath = req.params[0] ? `/${req.params[0]}` : "/";
+  const path = req.params.path;
+  const consumerPath = `/${Array.isArray(path) ? path.join("/") : path ?? ""}`;
 
   // SSRF runtime validate
   await validateSsrf(consumerKey.api.targetBaseUrl);
@@ -126,29 +121,39 @@ export const proxyRequest = async (
     req.body,
   );
 
+  const usageRecord = await reserveUsage(
+    consumerKey.id, consumerKey.userId, consumerKey.api.id,
+    priceVersion.id, consumerKey.api.network, costPerCall,
+  );
+
   // ⑤ Execute
   const startTime = Date.now();
 
-  await new Promise<void>((resolve, reject) => {
-    executeHttpRequest(
-      builtRequest,
-      res,
-      async (statusCode, latencyMs) => {
-        void finalizeUsage(
-          usageRecord.id,
-          consumerKey.userId,
-          consumerKey.api.id,
-          costPerCall,
-          latencyMs,
-          statusCode,
-        );
-        resolve();
-      },
-      async (error) => {
-        await refundUsage(usageRecord.id);
-        reject(error);
-      },
-      startTime,
+  let response: { statusCode: number; latencyMs: number };
+  try {
+    response = await new Promise<{ statusCode: number; latencyMs: number }>((resolve, reject) => {
+      executeHttpRequest(
+        builtRequest, res,
+        (statusCode, latencyMs) => resolve({ statusCode, latencyMs }),
+        reject, startTime,
+      );
+    });
+  } catch (error) {
+    await refundUsage(usageRecord.id);
+    throw error;
+  }
+  try {
+    await prisma.marketplaceUsageRecord.update({ where: { id: usageRecord.id }, data: {
+      status: "FORWARDED", upstreamStatusCode: response.statusCode, latencyMs: response.latencyMs,
+    } });
+    await finalizeUsage(
+      usageRecord.id, consumerKey.userId, consumerKey.api.id,
+      costPerCall, response.latencyMs, response.statusCode,
     );
-  });
+  } catch (error) {
+    // The upstream response has already been streamed. Preserve the debit
+    // for reconciliation rather than refunding a successfully delivered call.
+    logger.error({ err: error, usageRecordId: usageRecord.id }, "Marketplace billing finalization failed");
+    throw error;
+  }
 };

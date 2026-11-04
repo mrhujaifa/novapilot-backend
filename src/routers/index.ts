@@ -15,6 +15,7 @@ import { earningRouter } from "../modules/marketplace/earnings/earning.routes";
 import { withdrawalRouter } from "../modules/marketplace/withdrawal/withdrawal.routes";
 import { marketplaceAdminRouter } from "../modules/marketplace/admin/marketplace-admin.routes";
 import { proxyRouter } from "../modules/marketplace/proxy/proxy.routes";
+import { playgroundRouter } from "../modules/marketplace/proxy/playground.routes";
 
 const router = Router();
 
@@ -45,6 +46,7 @@ router.use("/usage", usageRouter);
 // Marketplace
 router.use("/marketplace/creator", creatorRouter);
 router.use("/marketplace/creator", listingRouter);
+router.use("/marketplace", playgroundRouter);
 router.use("/marketplace", consumerRouter);
 router.use("/marketplace/creator", earningRouter);
 router.use("/marketplace/creator", withdrawalRouter);
