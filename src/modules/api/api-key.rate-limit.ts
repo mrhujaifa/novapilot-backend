@@ -1,10 +1,17 @@
-import { redisClient } from "../../lib/redis";
+import { runRedisCommand } from "../../lib/redis";
 import { AppError } from "../../errors/AppError";
 import { ErrorCodes } from "../../errors/error-codes";
 import { StatusCodes } from "http-status-codes";
 
 const DEFAULT_LIMIT_PER_MINUTE = 60; // fallback when the key has no custom override
 const WINDOW_SECONDS = 60;
+const INCREMENT_WINDOW = `
+  local count = redis.call('INCR', KEYS[1])
+  if count == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+  end
+  return count
+`;
 
 /**
  * Fixed-window rate limiter keyed per API key. Uses Redis INCR (atomic)
@@ -23,13 +30,14 @@ export async function enforceApiKeyRateLimit(
   const limit = limitPerMinute ?? DEFAULT_LIMIT_PER_MINUTE;
   const redisKey = `ratelimit:apikey:${apiKeyId}`;
 
-  const count = await redisClient.incr(redisKey);
-
-  // Only set TTL on the first request in this window — subsequent INCRs
-  // must not reset the expiry, or the window would never close.
-  if (count === 1) {
-    await redisClient.expire(redisKey, WINDOW_SECONDS);
-  }
+  // Set the counter and its expiry atomically: a dropped socket between
+  // separate INCR/EXPIRE calls must not leave a permanent rate-limit key.
+  const count = await runRedisCommand((client) =>
+    client.eval(INCREMENT_WINDOW, {
+      keys: [redisKey],
+      arguments: [String(WINDOW_SECONDS)],
+    }),
+  ) as number;
 
   if (count > limit) {
     throw new AppError(

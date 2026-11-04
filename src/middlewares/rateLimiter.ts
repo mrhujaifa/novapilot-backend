@@ -1,7 +1,7 @@
 import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import { StatusCodes } from "http-status-codes";
 import RedisStore from "rate-limit-redis";
-import { redisClient } from "../lib/redis";
+import { runRedisCommand } from "../lib/redis";
 import { sendApiResponse } from "../utils/sendApiResponse";
 import { ErrorCodes } from "../errors/error-codes";
 
@@ -27,12 +27,8 @@ export const authRateLimiter = rateLimit({
 // to starve other users' quota, and a shared NAT/IP shouldn't rate-limit
 // unrelated users.
 const redisStore = new RedisStore({
-  sendCommand: async (...args: string[]) => {
-    if (!redisClient.isOpen) {
-      await redisClient.connect();
-    }
-    return redisClient.sendCommand(args);
-  },
+  sendCommand: (...args: string[]) =>
+    runRedisCommand((client) => client.sendCommand(args)),
   prefix: "rl:billing:deduct:",
 });
 
