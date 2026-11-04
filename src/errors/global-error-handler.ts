@@ -57,7 +57,8 @@ export function globalErrorHandler(
   // (including stack, via pino's error serializer), never leak internals
   // to the client.
   logger.error(
-    { err, path: req.originalUrl, method: req.method, body: req.body },
+    // Request bodies can contain upstream API credentials and passwords.
+    { err, path: req.originalUrl, method: req.method },
     "Unhandled application error",
   );
 

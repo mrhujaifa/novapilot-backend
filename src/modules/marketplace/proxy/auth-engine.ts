@@ -2,6 +2,24 @@ import crypto from "crypto";
 import { AppError } from "../../../errors/AppError";
 import { ErrorCodes } from "../../../errors/error-codes";
 import { StatusCodes } from "http-status-codes";
+import { logger } from "../../../lib/logger";
+
+const getEncryptionKey = (): Buffer => {
+  const value = process.env.ENCRYPTION_KEY;
+  if (!value || !/^[a-fA-F0-9]{64}$/.test(value)) {
+    logger.error(
+      { configuration: "ENCRYPTION_KEY" },
+      "Credential encryption requires ENCRYPTION_KEY to contain exactly 64 hexadecimal characters",
+    );
+    throw new AppError(
+      StatusCodes.SERVICE_UNAVAILABLE,
+      "API credential encryption is not configured. Please contact support.",
+      ErrorCodes.SERVICE_UNAVAILABLE,
+      { expose: true },
+    );
+  }
+  return Buffer.from(value, "hex");
+};
 
 export interface AuthSpec {
   type:
@@ -28,7 +46,7 @@ export interface AppliedAuth {
 // Encrypted credential decrypt করা
 const decryptCredential = (encryptedData: string): Record<string, string> => {
   const [ivHex, encryptedHex] = encryptedData.split(":");
-  const key = Buffer.from(process.env.ENCRYPTION_KEY!, "hex");
+  const key = getEncryptionKey();
   const iv = Buffer.from(ivHex, "hex");
   const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
   const decrypted = Buffer.concat([
@@ -40,7 +58,7 @@ const decryptCredential = (encryptedData: string): Record<string, string> => {
 
 // Credential encrypt করা
 export const encryptCredential = (data: Record<string, string>): string => {
-  const key = Buffer.from(process.env.ENCRYPTION_KEY!, "hex");
+  const key = getEncryptionKey();
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
   const encrypted = Buffer.concat([
